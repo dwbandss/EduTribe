@@ -1,0 +1,37 @@
+import { connectDB } from "../lib/mongodb";
+import mongoose from "mongoose";
+
+async function resetDatabase() {
+  try {
+    await connectDB();
+    
+    console.log("Connected to MongoDB");
+    
+    const db = mongoose.connection.db;
+    if (!db) {
+      throw new Error("Database connection not established");
+    }
+    
+    // Get all collections
+    const collections = await db.listCollections().toArray();
+    
+    // Drop each collection
+    for (const collection of collections) {
+      console.log(`Dropping collection: ${collection.name}`);
+      await db.dropCollection(collection.name);
+    }
+    
+    console.log("All collections dropped successfully");
+    
+    // Close connection
+    await mongoose.connection.close();
+    console.log("Database reset complete");
+    
+  } catch (error) {
+    console.error("Error resetting database:", error);
+    process.exit(1);
+  }
+}
+
+// Run the reset
+resetDatabase();

@@ -1,102 +1,206 @@
 import { connectDB } from "../../../../lib/mongodb";
 import { generateUID } from "../../../../lib/generateUID";
-import bcrypt from "bcryptjs";
 import jwt from "jsonwebtoken";
 import { z } from "zod";
-import User from "../../../../models/User";
-import School from "../../../../models/School";
+import { User, School } from "../../../../models/refactored";
 
-// Input validation schema
-const registerSchema = z.object({
-  fullName: z.string().min(2, "Name must be at least 2 characters"),
+/* -----------------------------
+   Helpers
+------------------------------ */
+
+// Convert "" -> undefined so optional fields don't fail validation
+const emptyToUndefined = (v: unknown) => (typeof v === "string" && v.trim() === "" ? undefined : v);
+
+/* -----------------------------
+   Base Schema
+------------------------------ */
+
+const baseSchema = z.object({
+  fullName: z.string().min(2, "Full name must be at least 2 characters"),
   email: z.string().email("Invalid email address"),
   password: z.string().min(8, "Password must be at least 8 characters"),
   confirmPassword: z.string(),
   role: z.enum(["volunteer", "ngo", "donor", "student", "admin", "school"]),
-  schoolName: z.string().optional(),
-  schoolCode: z.string().optional(),
-  district: z.string().optional(),
-  state: z.string().optional()
-}).refine((data) => data.password === data.confirmPassword, {
-  message: "Passwords don't match",
-  path: ["confirmPassword"]
+  phone: z.preprocess(emptyToUndefined, z.string().optional()),
 });
 
-const JWT_SECRET = process.env.JWT_SECRET || "change_this_in_production";
+/* -----------------------------
+   Role-specific fields (optional here)
+------------------------------ */
+
+const registerSchema = baseSchema
+  .extend({
+    organizationName: z.preprocess(emptyToUndefined, z.string().optional()),
+    schoolName: z.preprocess(emptyToUndefined, z.string().optional()),
+    schoolCode: z.preprocess(emptyToUndefined, z.string().optional()),
+    district: z.preprocess(emptyToUndefined, z.string().optional()),
+    state: z.preprocess(emptyToUndefined, z.string().optional()),
+  })
+  .superRefine((data, ctx) => {
+    // Password match
+    if (data.password !== data.confirmPassword) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["confirmPassword"],
+        message: "Passwords don't match",
+      });
+    }
+
+    // NGO requirement
+    if (data.role === "ngo" && !data.organizationName) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["organizationName"],
+        message: "Organization name is required for NGO",
+      });
+    }
+
+    // School requirements
+    if (data.role === "school") {
+      if (!data.schoolName) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          path: ["schoolName"],
+          message: "School name is required",
+        });
+      }
+
+      if (!data.district) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          path: ["district"],
+          message: "District is required",
+        });
+      }
+
+      if (!data.state) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          path: ["state"],
+          message: "State is required",
+        });
+      }
+    }
+  });
+
+const JWT_SECRET = process.env.JWT_SECRET as string;
+
+/* -----------------------------
+   Register API
+------------------------------ */
 
 export async function POST(req: Request) {
   try {
     const body = await req.json();
-    
-    // Validate input
-    const validatedData = registerSchema.parse(body);
-    const { fullName, email, password, role, schoolName, schoolCode, district, state } = validatedData;
+    const data = registerSchema.parse(body);
 
     await connectDB();
 
-    // Check if user already exists
-    const existingUser = await User.findOne({ email }) || await School.findOne({ email });
+    const existingUser = await User.findOne({ email: data.email });
+
     if (existingUser) {
-      return new Response(JSON.stringify({ success: false, message: "Email already registered" }), { status: 400 });
+      return new Response(
+        JSON.stringify({
+          success: false,
+          message: "Email already registered",
+        }),
+        { status: 400 }
+      );
     }
 
-    const uid = generateUID();
-    const hashedPassword = await bcrypt.hash(password, 12);
+    const uid = generateUID(data.role);
 
-    let user;
-    if (role === "school") {
-      user = new School({
-        schoolName: schoolName || fullName,
-        schoolCode: schoolCode || "",
-        email,
-        password: hashedPassword,
-        uid,
-        district,
-        state
-      });
-    } else {
-      user = new User({
-        name: fullName,
-        email,
-        password: hashedPassword,
-        uid,
-        role
+    const user = await User.create({
+      uid,
+      name:
+        data.role === "school"
+          ? data.schoolName
+          : data.role === "ngo"
+          ? data.organizationName
+          : data.fullName,
+      email: data.email,
+      password: data.password,
+      role: data.role,
+      phone: data.phone || "",
+      isVerified: false,
+    });
+
+    /* -----------------------------
+       Create School Profile
+    ------------------------------ */
+
+    if (data.role === "school") {
+      await School.create({
+        userId: user._id,
+        schoolName: data.schoolName,
+        schoolCode: data.schoolCode || `SCH-${Date.now()}`,
+        district: data.district,
+        state: data.state,
+        locationCoordinates: {
+          type: "Point",
+          coordinates: [0, 0],
+        },
+        studentsCount: 0,
+        teachersCount: 0,
+        facilities: [],
+        needs: [],
+        verificationStatus: "pending",
       });
     }
 
-    await user.save();
+    /* -----------------------------
+       Generate JWT
+    ------------------------------ */
 
-    // Generate JWT token
     const token = jwt.sign(
-      { uid: user.uid, role: role },
+      {
+        userId: user._id,
+        uid: user.uid,
+        role: user.role,
+      },
       JWT_SECRET,
       { expiresIn: "7d" }
     );
 
-    // Set HTTP-only cookie
-    const response = new Response(JSON.stringify({
-      success: true,
-      uid,
-      role,
-      message: `Your account has been created. Your login UID is: ${uid}. Please save this UID for login.` 
-    }), { status: 201 });
+    const response = new Response(
+      JSON.stringify({
+        success: true,
+        uid: user.uid,
+        role: user.role,
+        token,
+        message: "Account created successfully",
+      }),
+      { status: 201 }
+    );
 
-    response.headers.append('Set-Cookie', `token=${token}; HttpOnly; Secure=${process.env.NODE_ENV === "production"}; SameSite=Strict; Max-Age=${7 * 24 * 60 * 60 * 1000}; Path=/`);
+    response.headers.append(
+      "Set-Cookie",
+      `token=${token}; HttpOnly; Path=/; Max-Age=${60 * 60 * 24 * 7}; SameSite=Strict`
+    );
 
     return response;
   } catch (error) {
     if (error instanceof z.ZodError) {
-      return new Response(JSON.stringify({ 
-        success: false, 
-        message: "Validation error", 
-        errors: error.issues 
-      }), { status: 400 });
+      console.log("ZOD ERROR:", error.issues); // helps debugging
+
+      return new Response(
+        JSON.stringify({
+          success: false,
+          message: "Validation error",
+          errors: error.issues,
+        }),
+        { status: 400 }
+      );
     }
-    
-    console.error("Registration error:", error);
-    return new Response(JSON.stringify({ 
-      success: false, 
-      message: "Internal server error" 
-    }), { status: 500 });
+
+    console.error("Register error:", error);
+
+    return new Response(
+      JSON.stringify({
+        success: false,
+        message: "Internal server error",
+      }),
+      { status: 500 }
+    );
   }
 }
