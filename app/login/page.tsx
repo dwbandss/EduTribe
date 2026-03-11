@@ -31,7 +31,7 @@ export default function LoginPage() {
           "Content-Type": "application/json"
         },
         body: JSON.stringify({
-          uid,
+          identifier: uid,
           password
         })
       });

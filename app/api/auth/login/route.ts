@@ -1,47 +1,88 @@
-import { connectDB } from "../../../../lib/mongodb";
-import jwt from "jsonwebtoken";
+import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
-import { User } from "../../../../models/refactored";
+import bcrypt from "bcryptjs";
+import jwt from "jsonwebtoken";
+import mongoose from "mongoose";
 
+// Import models
+import { User } from "@/models/refactored";
+
+// Import database connection
+import dbConnect from "@/lib/dbConnect";
+
+// Validation Schema - supports both email and UID login
 const loginSchema = z.object({
-  uid: z.string().min(3, "UID is required"),
+  identifier: z.string().min(1, "Email or UID is required"), // Can be email or UID
   password: z.string().min(1, "Password is required")
+}).transform((data) => {
+  // Handle both email and UID formats
+  if (data.identifier.includes('@')) {
+    // Email format
+    return {
+      identifier: data.identifier.toLowerCase(),
+      password: data.password
+    };
+  } else {
+    // UID format (convert to uppercase)
+    return {
+      identifier: data.identifier.toUpperCase(),
+      password: data.password
+    };
+  }
 });
 
 const JWT_SECRET = process.env.JWT_SECRET as string;
 
-export async function POST(req: Request) {
+export async function POST(request: NextRequest) {
   try {
+    await dbConnect();
 
-    const body = await req.json();
+    // Validate request body
+    let body;
+    try {
+      body = await request.json();
+      console.log('=== DEBUG: Login request body ===', JSON.stringify(body, null, 2));
+    } catch (parseError) {
+      console.error('=== JSON Parse Error ===', parseError);
+      return NextResponse.json(
+        {
+          success: false,
+          message: "Invalid JSON format"
+        },
+        { status: 400 }
+      );
+    }
 
-    // Validate request
-    const { uid, password } = loginSchema.parse(body);
+    // Validate request data
+    const { identifier, password } = loginSchema.parse(body);
 
-    await connectDB();
-
-    // Find user by UID
-    const user = await User.findOne({ uid }).select("+password");
+    // Find user by email or UID
+    const user = await User.findOne({
+      $or: [
+        { email: identifier.toLowerCase() },
+        { uid: identifier.toUpperCase() }
+      ]
+    }).select("+password");
 
     if (!user) {
-      return new Response(
-        JSON.stringify({
+      return NextResponse.json(
+        {
           success: false,
-          message: "Invalid UID or password"
-        }),
+          message: "Invalid email/UID or password"
+        },
         { status: 401 }
       );
     }
 
     // Compare password
-    const isMatch = await user.comparePassword(password);
+    const isMatch = await bcrypt.compare(password, user.password);
 
     if (!isMatch) {
-      return new Response(
-        JSON.stringify({
+      return NextResponse.json(
+        {
           success: false,
-          message: "Invalid UID or password"
-        }),
+          message: "Invalid email/UID or password"
+        },
         { status: 401 }
       );
     }
@@ -50,21 +91,23 @@ export async function POST(req: Request) {
     const token = jwt.sign(
       {
         userId: user._id,
-        uid: user.uid,
-        role: user.role
+        role: user.role,
+        uid: user.uid
       },
       JWT_SECRET,
       { expiresIn: "7d" }
     );
 
-    const response = new Response(
-      JSON.stringify({
+    const response = NextResponse.json(
+      {
         success: true,
+        message: "Login successful",
         token,
-        uid: user.uid,
+        userId: user._id,
         role: user.role,
-        name: user.name
-      }),
+        name: user.name,
+        uid: user.uid
+      },
       { status: 200 }
     );
 
@@ -76,25 +119,27 @@ export async function POST(req: Request) {
     return response;
 
   } catch (error) {
+    console.error("Login error:", error);
 
     if (error instanceof z.ZodError) {
-      return new Response(
-        JSON.stringify({
+      return NextResponse.json(
+        {
           success: false,
-          message: "Validation error",
-          errors: error.issues
-        }),
+          message: "Validation failed",
+          errors: error.issues.map((err: z.ZodIssue) => ({
+            path: err.path,
+            message: err.message
+          }))
+        },
         { status: 400 }
       );
     }
 
-    console.error("Login error:", error);
-
-    return new Response(
-      JSON.stringify({
+    return NextResponse.json(
+      {
         success: false,
         message: "Internal server error"
-      }),
+      },
       { status: 500 }
     );
   }

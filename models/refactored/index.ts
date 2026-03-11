@@ -1,20 +1,32 @@
 // Import all refactored models and types
-import { User, validateUser, type IUser, type UserRole } from './User';
-import { Student, validateStudent, type IStudent, type TribeCategory } from './Student';
-import { School, validateSchool, type ISchool, type VerificationStatus, type SchoolFacility, type SchoolNeed } from './School';
-import { Volunteer, validateVolunteer, type IVolunteer, type VolunteerSkill, type EducationLevel } from './Volunteer';
-import { NGO, validateNGO, type INGO, type NGOFocusArea } from './NGO';
-import { Donor, validateDonor, type IDonor, type DonorType } from './Donor';
-import { Admin, validateAdmin, type IAdmin, type AdminPermission, type AdminRole } from './Admin';
+import { User, type IUser, type UserRole } from './User';
+import { Student, type IStudent, type TribeCategory } from './Student';
+import { School, type ISchool, type VerificationStatus } from './SchoolSimple';
+import { Volunteer, type IVolunteer, type Skill, type Subject } from './Volunteer';
+import { NGO, type INGO, type FocusArea } from './NGOSimple';
+import { Donor, type IDonor, type DonorType } from './DonorSimple';
+import { Admin, type IAdmin, type Permission } from './AdminSimple';
+
+// Supporting Models
+import { Scholarship, type IScholarship, type Category } from './Scholarship';
+import { VolunteerRequest, type IVolunteerRequest, type RequestStatus } from './VolunteerRequest';
+import { DistrictAnalytics, type IDistrictAnalytics } from './DistrictAnalytics';
+import { SecurityLog, type ISecurityLog } from './SecurityLogs';
 
 // Re-export all models and types
-export { User, validateUser, type IUser, type UserRole };
-export { Student, validateStudent, type IStudent, type TribeCategory };
-export { School, validateSchool, type ISchool, type VerificationStatus, type SchoolFacility, type SchoolNeed };
-export { Volunteer, validateVolunteer, type IVolunteer, type VolunteerSkill, type EducationLevel };
-export { NGO, validateNGO, type INGO, type NGOFocusArea };
-export { Donor, validateDonor, type IDonor, type DonorType };
-export { Admin, validateAdmin, type IAdmin, type AdminPermission, type AdminRole };
+export { User, type IUser, type UserRole };
+export { Student, type IStudent, type TribeCategory };
+export { School, type ISchool, type VerificationStatus };
+export { Volunteer, type IVolunteer, type Skill, type Subject };
+export { NGO, type INGO, type FocusArea };
+export { Donor, type IDonor, type DonorType };
+export { Admin, type IAdmin, type Permission };
+
+// Supporting Models
+export { Scholarship, type IScholarship, type Category };
+export { VolunteerRequest, type IVolunteerRequest, type RequestStatus };
+export { DistrictAnalytics, type IDistrictAnalytics };
+export { SecurityLog, type ISecurityLog };
 
 // Model relationships and utilities
 export interface ModelRelations {

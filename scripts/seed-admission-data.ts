@@ -1,5 +1,5 @@
 import { connectDB } from '../lib/mongodb';
-import { School } from '../models/refactored/SchoolInfo';
+import { School } from '../models/refactored/SchoolSimple';
 import { Scheme } from '../models/refactored/Scheme';
 
 async function seedDatabase() {
@@ -13,7 +13,7 @@ async function seedDatabase() {
     // Sample schools data
     const schools = [
       {
-        name: "Eklavya Model Residential School (EMRS) - Koraput",
+        schoolName: "Eklavya Model Residential School (EMRS) - Koraput",
         type: "government",
         board: "CBSE",
         state: "Odisha",
@@ -38,7 +38,7 @@ async function seedDatabase() {
         website: "https://emrs-koraput.odisha.gov.in"
       },
       {
-        name: "Jawahar Navodaya Vidyalaya - Rayagada",
+        schoolName: "Jawahar Navodaya Vidyalaya - Rayagada",
         type: "government",
         board: "CBSE",
         state: "Odisha",

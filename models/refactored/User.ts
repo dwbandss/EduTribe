@@ -23,6 +23,7 @@ export interface IUser extends Document {
   role: UserRole;
   phone?: string;
   isVerified: boolean;
+  lastLogin?: Date;
   createdAt: Date;
   updatedAt: Date;
 
@@ -120,6 +121,10 @@ const userSchema = new Schema<IUser>(
       type: Boolean,
       default: false,
     },
+
+    lastLogin: {
+      type: Date,
+    },
   },
   {
     timestamps: true,
@@ -170,7 +175,7 @@ userSchema.methods.getJWT = function (): string {
       id: this._id,
       email: this.email,
       role: this.role,
-      uid: this.id 
+      uid: this.uid 
     }, 
     JWT_SECRET,
     { expiresIn: "7d" }

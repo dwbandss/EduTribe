@@ -19,7 +19,7 @@ function SignupContent() {
     email: '',
     password: '',
     confirmPassword: '',
-    role: preselectedRole,
+    role: preselectedRole || 'student', // Default to student if not preselected
     organizationName: '',
     schoolName: '',
     schoolCode: '',

@@ -118,7 +118,7 @@ export const vectorStore = new VectorStore();
 export async function initializeVectorStore(): Promise<void> {
   try {
     // Import models
-    const { School } = await import('../../models/refactored/SchoolInfo');
+    const { School } = await import('../../models/refactored/SchoolSimple');
     const { Scheme } = await import('../../models/refactored/Scheme');
     
     // Get sample schools and schemes
