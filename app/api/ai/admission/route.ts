@@ -1,150 +1,159 @@
 import { NextRequest, NextResponse } from 'next/server';
-import jwt from 'jsonwebtoken';
+import dbConnect from '@/lib/dbConnect';
+import { documentStore } from '@/lib/document-store';
+import { sampleSchools, sampleSchemes } from '@/data/sample-data';
+import { askGemini } from '@/lib/ai/gemini';
 import { z } from 'zod';
-import { connectDB } from '../../../../lib/mongodb';
-import { askGemini } from '../../../../lib/ai/gemini';
-import { vectorStore, initializeVectorStore, Document } from '../../../../lib/ai/embeddings';
-import { rateLimit } from '../../../../lib/middleware/rateLimit';
 
-// Input validation schema
-const admissionQuerySchema = z.object({
-  question: z.string().min(5, "Question must be at least 5 characters"),
+// Initialize document store with sample data
+sampleSchools.forEach(school => {
+  documentStore.addDocument({
+    id: school.id,
+    text: school.text,
+    type: 'school',
+    title: school.name
+  });
+});
+
+sampleSchemes.forEach(scheme => {
+  documentStore.addDocument({
+    id: scheme.id,
+    text: scheme.text,
+    type: 'scheme',
+    title: scheme.name
+  });
+});
+
+console.log('Document store initialized with', documentStore.getAllDocuments().length, 'documents');
+
+// Validation schema
+const AdmissionRequestSchema = z.object({
+  question: z.string().min(1, 'Question is required'),
   studentProfile: z.object({
     class: z.string().optional(),
     state: z.string().optional(),
     category: z.string().optional()
-  }).optional()
+  })
 });
 
-// Rate limiting: 10 requests per hour per student
-const rateLimitConfig = {
-  windowMs: 60 * 60 * 1000, // 1 hour
-  maxRequests: 10, // 10 requests per hour
-  keyGenerator: (req: NextRequest) => {
-    const token = req.cookies.get('token')?.value || 
-                  req.headers.get('authorization')?.replace('Bearer ', '');
-    return `admission-query:${token}`;
-  }
-};
-
-export async function POST(req: NextRequest) {
+export async function POST(request: NextRequest) {
   try {
-    // Apply rate limiting
-    const rateLimitResult = await rateLimit(req, rateLimitConfig);
-    if (!rateLimitResult.success) {
+    await dbConnect();
+
+    // Validate request
+    const body = await request.json();
+    const validation = AdmissionRequestSchema.safeParse(body);
+
+    if (!validation.success) {
       return NextResponse.json(
-        { success: false, message: "Too many admission queries. Please try again later." },
-        { status: 429 }
-      );
-    }
-
-    // Verify JWT token
-    const token = req.cookies.get('token')?.value || 
-                  req.headers.get('authorization')?.replace('Bearer ', '');
-    
-    if (!token) {
-      return NextResponse.json(
-        { success: false, message: "Authentication required" },
-        { status: 401 }
-      );
-    }
-
-    const decoded = jwt.verify(token, process.env.JWT_SECRET!) as any;
-    if (!decoded || decoded.role !== 'student') {
-      return NextResponse.json(
-        { success: false, message: "This feature is only available for students" },
-        { status: 403 }
-      );
-    }
-
-    // Validate input
-    const body = await req.json();
-    const validatedData = admissionQuerySchema.parse(body);
-    const { question, studentProfile } = validatedData;
-
-    // Initialize vector store if needed
-    if (vectorStore.getDocumentCount() === 0) {
-      await initializeVectorStore();
-    }
-
-    // Search for relevant documents
-    const relevantDocs = await vectorStore.search(question, 5);
-    
-    if (relevantDocs.length === 0) {
-      return NextResponse.json({
-        success: true,
-        answer: "I couldn't find specific information about your query. Please try rephrasing your question or contact the school directly for more details.",
-        sources: []
-      });
-    }
-
-    // Create context-aware prompt
-    const context = relevantDocs.map(doc => 
-      `${doc.metadata.title} (${doc.metadata.type}): ${doc.text.substring(0, 500)}...`
-    ).join('\n\n');
-
-    const profileContext = studentProfile ? 
-      `Student Profile: Class ${studentProfile.class || 'Not specified'}, State: ${studentProfile.state || 'Not specified'}, Category: ${studentProfile.category || 'Not specified'}\n\n` : '';
-
-    const prompt = `You are an AI admission assistant for tribal students in India. Use the provided context to answer the student's question accurately and helpfully.
-
-${profileContext}Context Information:
-${context}
-
-Student Question: ${question}
-
-Instructions:
-1. Answer based on the provided context
-2. Be specific about admission requirements, documents, and processes
-3. If information is missing, suggest contacting the school directly
-4. Provide actionable advice
-5. Format your response in a clear, organized way
-6. Include specific document names, dates, and contact information when available
-
-Provide a comprehensive answer in 2-3 paragraphs.`;
-
-    // Get AI response
-    const aiResponse = await askGemini(prompt, { maxTokens: 1000 });
-
-    // Format sources
-    const sources = relevantDocs.map(doc => ({
-      id: doc.id,
-      type: doc.metadata.type,
-      title: doc.metadata.title,
-      state: doc.metadata.state,
-      category: doc.metadata.category,
-      class: doc.metadata.class
-    }));
-
-    return NextResponse.json({
-      success: true,
-      answer: aiResponse,
-      sources
-    });
-
-  } catch (error) {
-    console.error('Admission query error:', error);
-    
-    if (error instanceof z.ZodError) {
-      return NextResponse.json(
-        { 
-          success: false, 
-          message: "Validation error", 
-          errors: error.issues 
-        },
+        { success: false, message: 'Invalid request data' },
         { status: 400 }
       );
     }
 
-    if (error instanceof jwt.JsonWebTokenError) {
+    const { question, studentProfile } = validation.data;
+
+    // Search for relevant documents
+    const relevantDocs = documentStore.searchDocuments(question, 10);
+
+    // Debug: Log what documents are found
+    console.log('Question:', question);
+    console.log('Found documents:', relevantDocs.length);
+    console.log('Document titles:', relevantDocs.map(d => d.title));
+
+    // Build context for AI
+    const context = relevantDocs.map(doc => `DOCUMENT: ${doc.title}\nCONTENT: ${doc.text}`).join('\n\n---\n\n');
+
+    // Create AI prompt
+    const prompt = `
+CRITICAL INSTRUCTION: You must answer the student's specific question using ONLY the provided documents. NO GENERIC RESPONSES.
+
+STUDENT'S EXACT QUESTION: "${question}"
+
+STUDENT PROFILE:
+- Class: ${studentProfile.class || 'Not specified'}
+- State: ${studentProfile.state || 'Not specified'}
+- Category: ${studentProfile.category || 'Not specified'}
+
+AVAILABLE DOCUMENTS:
+${context}
+
+TASK: Answer the question "${question}" using ONLY the information from the documents above.
+
+RULES:
+1. DO NOT provide generic greetings or introductions
+2. DO NOT say "I can help with..." or "I'm here to assist..."
+3. DIRECTLY answer the specific question asked
+4. If documents contain the answer, use that information
+5. If documents DON'T contain the answer, say "I don't have information about that in the available documents"
+6. Reference specific document titles in your answer
+
+EXAMPLE OF WRONG RESPONSE: "Hello! I can help you with scholarships..."
+EXAMPLE OF RIGHT RESPONSE: "Based on the documents, the KVPY scholarship deadline is..."
+
+RESPONSE FORMAT:
+{
+  "answer": "Direct answer to the question based on documents",
+  "sources": [
+    {"id": "doc_id", "type": "school/scheme", "title": "Document Title"}
+  ]
+}
+
+ANSWER THE QUESTION: "${question}"
+`;
+
+    // Get AI response
+    const aiText = await askGemini(prompt);
+    
+    if (!aiText) {
       return NextResponse.json(
-        { success: false, message: "Invalid authentication token" },
-        { status: 401 }
+        { success: false, message: 'Failed to get AI response' },
+        { status: 500 }
       );
     }
 
+    // Parse AI response
+    let aiResponse: {
+      answer: string;
+      sources: Array<{
+        id: string;
+        type: 'school' | 'scheme';
+        title: string;
+      }>;
+    };
+    
+    try {
+      const jsonMatch = aiText.match(/\{[\s\S]*\}/);
+      if (jsonMatch) {
+        aiResponse = JSON.parse(jsonMatch[0]);
+      } else {
+        // Fallback to simple response
+        aiResponse = {
+          answer: aiText,
+          sources: relevantDocs.map(doc => ({
+            id: doc.id,
+            type: doc.type,
+            title: doc.title
+          }))
+        };
+      }
+    } catch (parseError) {
+      console.error('AI response parsing error:', parseError);
+      aiResponse = {
+        answer: 'I apologize, but I encountered an error processing your request.',
+        sources: []
+      };
+    }
+
+    return NextResponse.json({
+      success: true,
+      data: aiResponse
+    });
+
+  } catch (error) {
+    console.error('Admission assistant error:', error);
     return NextResponse.json(
-      { success: false, message: "Internal server error" },
+      { success: false, message: 'Internal server error' },
       { status: 500 }
     );
   }

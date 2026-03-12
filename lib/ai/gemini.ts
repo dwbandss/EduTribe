@@ -188,7 +188,7 @@ export async function askGemini(prompt: string, options: GeminiOptions = {}): Pr
     // Initialize Gemini
     const genAI = new GoogleGenerativeAI(apiKey);
     const model = genAI.getGenerativeModel({
-      model: options.model || 'gemini-1.5-flash',
+      model: options.model || 'gemini-2.5-flash',
     });
 
     // Generate content with retry logic

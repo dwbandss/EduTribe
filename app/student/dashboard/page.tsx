@@ -4,15 +4,21 @@ import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { BookOpen, GraduationCap, FileText, Users, Bot, LogOut, Home, User, Bell, Search } from 'lucide-react';
+import { BookOpen, GraduationCap, FileText, Users, Bot, LogOut, Home, User, Bell, Search, Award, MessageSquare } from 'lucide-react';
 import BackButton from '@/components/ui/BackButton';
 import CompactAIAssistant from '@/components/ui/CompactAIAssistant';
+import ScholarshipRecommendations from '@/components/scholarship/ScholarshipRecommendations';
+import ProfileEditor from '@/components/student/ProfileEditor';
+import AdmissionAssistant from '@/components/ai/AdmissionAssistant';
 
 interface StudentProfile {
   uid: string;
   name: string;
   email: string;
   role: string;
+  class?: string;
+  state?: string;
+  category?: string;
 }
 
 const TabButton: React.FC<{ tab: { label: string; icon: React.ReactNode }; isActive: boolean; onClick: () => void }> = ({ tab, isActive, onClick }) => (
@@ -84,8 +90,9 @@ export default function StudentDashboard() {
 
   const tabs = [
     { label: 'Overview', icon: <Home className="w-4 h-4" /> },
-    { label: 'Admission', icon: <GraduationCap className="w-4 h-4" /> },
-    { label: 'Scholarships', icon: <FileText className="w-4 h-4" /> },
+    { label: 'Admission Assistant', icon: <MessageSquare className="w-4 h-4" /> },
+    { label: 'Scholarships', icon: <Award className="w-4 h-4" /> },
+    { label: 'Profile', icon: <User className="w-4 h-4" /> },
     { label: 'Notifications', icon: <Bell className="w-4 h-4" /> },
   ];
 
@@ -194,16 +201,74 @@ export default function StudentDashboard() {
                 </div>
               )}
 
-              {activeTab === 'admission' && (
+              {activeTab === 'admission assistant' && (
                 <Card>
                   <CardHeader>
-                    <CardTitle>Admission Assistant</CardTitle>
+                    <CardTitle className="flex items-center gap-2">
+                      <MessageSquare className="w-5 h-5" />
+                      Admission Assistant
+                    </CardTitle>
+                  </CardHeader>
+                  <CardContent className="p-0">
+                    <AdmissionAssistant 
+                      studentProfile={{
+                        class: student.class || '12th',
+                        state: student.state || 'Not specified',
+                        category: student.category || 'General'
+                      }}
+                    />
+                  </CardContent>
+                </Card>
+              )}
+
+              {activeTab === 'scholarships' && (
+                <Card>
+                  <CardHeader>
+                    <CardTitle className="flex items-center gap-2">
+                      <Award className="w-5 h-5" />
+                      Scholarship Recommendations
+                    </CardTitle>
+                  </CardHeader>
+                  <CardContent className="p-0">
+                    <ScholarshipRecommendations 
+                      studentProfile={{
+                        class: student.class || '12th',
+                        state: student.state || 'Not specified',
+                        category: student.category || 'General'
+                      }}
+                    />
+                  </CardContent>
+                </Card>
+              )}
+
+              {activeTab === 'profile' && (
+                <Card>
+                  <CardHeader>
+                    <CardTitle className="flex items-center gap-2">
+                      <User className="w-5 h-5" />
+                      Edit Profile
+                    </CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    <ProfileEditor 
+                      student={student}
+                      onUpdate={(updatedProfile) => setStudent(updatedProfile)}
+                    />
+                  </CardContent>
+                </Card>
+              )}
+
+              {activeTab === 'notifications' && (
+                <Card>
+                  <CardHeader>
+                    <CardTitle className="flex items-center gap-2">
+                      <Bell className="w-5 h-5" />
+                      Notifications
+                    </CardTitle>
                   </CardHeader>
                   <CardContent>
                     <div className="text-center py-8">
-                      <Bot className="w-12 h-12 mx-auto mb-4 text-primary" />
-                      <h3 className="text-lg font-semibold mb-2">AI Admission Assistant</h3>
-                      <p className="text-muted-foreground">Get help with school admissions and applications</p>
+                      <p className="text-muted-foreground">No new notifications</p>
                     </div>
                   </CardContent>
                 </Card>
