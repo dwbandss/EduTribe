@@ -171,6 +171,8 @@ SchoolSchema.index({ location: '2dsphere' });
 SchoolSchema.index({ state: 1 });
 SchoolSchema.index({ district: 1 });
 SchoolSchema.index({ 'facilities.hostel': 1 });
+SchoolSchema.index({ streamsOffered: 1 });
+SchoolSchema.index({ verificationStatus: 1 });
 SchoolSchema.index({ userId: 1 });
 
 // Export School model

@@ -133,7 +133,7 @@ function MapBounds({ schools }: { schools: School[] }) {
   const map = useMap();
   
   useEffect(() => {
-    if (schools.length === 0) return;
+    if (!schools || schools.length === 0) return;
     
     const bounds: [number, number][] = schools.map(school => [
       school.location.coordinates[1],
@@ -165,23 +165,33 @@ export default function MapComponent({ schools, center = [20.5937, 78.9629], zoo
 
   return (
     <div className="w-full h-full">
-      <MapContainer
-        center={center}
-        zoom={zoom}
-        style={{ height: '100%', width: '100%' }}
-        className="rounded-lg"
-      >
-        <TileLayer
-          attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
-          url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
-        />
-        
-        {schools.map((school) => (
-          <SchoolMarker key={school._id} school={school} />
-        ))}
-        
-        <MapBounds schools={schools} />
-      </MapContainer>
+      {(!schools || schools.length === 0) ? (
+        <div className="h-full flex items-center justify-center bg-muted rounded-lg">
+          <div className="text-center">
+            <div className="w-12 h-12 mx-auto mb-4 text-muted-foreground">🗺️</div>
+            <h3 className="text-lg font-semibold mb-2">No Schools Found</h3>
+            <p className="text-muted-foreground">Try searching for schools in your area</p>
+          </div>
+        </div>
+      ) : (
+        <MapContainer
+          center={center}
+          zoom={zoom}
+          style={{ height: '100%', width: '100%' }}
+          className="rounded-lg"
+        >
+          <TileLayer
+            attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
+            url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
+          />
+          
+          {schools && schools.map((school) => (
+            <SchoolMarker key={school._id} school={school} />
+          ))}
+          
+          <MapBounds schools={schools} />
+        </MapContainer>
+      )}
     </div>
   );
 }

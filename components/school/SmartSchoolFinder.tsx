@@ -1,4 +1,4 @@
-"use client";
+'use client';
 
 import { useState, useEffect, useCallback } from 'react';
 import { Search, Filter, MapPin, School, Star, Users, Wifi, Car, Home, BookOpen, Microscope, Trophy } from 'lucide-react';
@@ -109,6 +109,7 @@ const TRIBAL_CATEGORIES = ['ST', 'SC', 'OBC', 'General'];
 export type { School, SearchFilters, SearchResponse };
 
 export default function SmartSchoolFinder() {
+  // const t = useTranslations(); // Temporarily commented out
   const [query, setQuery] = useState('');
   const [filters, setFilters] = useState<SearchFilters>({});
   const [schools, setSchools] = useState<School[]>([]);
@@ -143,23 +144,23 @@ export default function SmartSchoolFinder() {
       const data = await response.json();
       
       if (data.success) {
-        setSearchResponse(data.data);
+        setSearchResponse(data);
         if (page === 1) {
-          setSchools(data.data.schools);
+          setSchools(data.schools || []);
         } else {
-          setSchools(prev => [...prev, ...data.data.schools]);
+          setSchools(prev => [...prev, ...(data.schools || [])]);
         }
         
         // Show parsing confidence if available
-        if (data.data.parsing && data.data.parsing.confidence > 0) {
-          toast.success(`Query parsed with ${Math.round(data.data.parsing.confidence * 100)}% confidence`);
+        if (data.parsing && data.parsing.confidence > 0) {
+          toast.success(`Query parsed with ${Math.round(data.parsing.confidence * 100)}% confidence`);
         }
       } else {
         toast.error(data.message || 'Search failed');
       }
     } catch (error) {
       console.error('Search error:', error);
-      toast.error('Failed to search schools');
+      toast.error('Search failed');
     } finally {
       setLoading(false);
     }
@@ -295,9 +296,9 @@ export default function SmartSchoolFinder() {
           <div className="flex items-center gap-4">
             <School className="w-8 h-8 text-primary" />
             <div>
-              <h1 className="text-2xl font-bold">Smart Tribal School Finder</h1>
+              <h1 className="text-2xl font-bold">School Finder</h1>
               <p className="text-sm text-muted-foreground">
-                Find schools using natural language search
+                Search schools
               </p>
             </div>
           </div>
@@ -542,7 +543,7 @@ export default function SmartSchoolFinder() {
                   </div>
                 ) : (
                   <div className="h-96 lg:h-[600px] rounded-lg overflow-hidden border">
-                    <MapComponent schools={schools} />
+                    <MapComponent schools={schools || []} />
                   </div>
                 )}
 
