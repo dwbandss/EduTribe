@@ -5,6 +5,7 @@ class DocumentStore {
     text: string;
     type: 'school' | 'scheme';
     title: string;
+    link?: string;
   }> = new Map();
 
   addDocument(doc: {
@@ -12,12 +13,14 @@ class DocumentStore {
     text: string;
     type: 'school' | 'scheme';
     title: string;
+    link?: string;
   }) {
     this.documents.set(doc.id, {
       id: doc.id,
       text: doc.text,
       type: doc.type,
-      title: doc.title
+      title: doc.title,
+      link: doc.link
     });
   }
 

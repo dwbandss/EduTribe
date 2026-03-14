@@ -14,6 +14,12 @@ interface Scholarship {
   requiredDocs: string[];
   link: string;
   deadline: string;
+  sponsoringOrg?: string;
+  source?: {
+    name: string;
+    link: string;
+    type: string;
+  };
 }
 
 interface ScholarshipRecommendationsProps {
@@ -31,10 +37,33 @@ export default function ScholarshipRecommendations({ studentProfile }: Scholarsh
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
 
+  // Check if profile is complete enough for personalized recommendations
+  const isProfileComplete = () => {
+    return !!(studentProfile.class && studentProfile.state);
+  };
+
+  const getProfileCompletenessWarning = () => {
+    const missingFields = [];
+    if (!studentProfile.class) missingFields.push('class');
+    if (!studentProfile.state) missingFields.push('state');
+    if (!studentProfile.category) missingFields.push('category');
+    
+    return missingFields.length > 0 ? (
+      <div className="bg-yellow-50 border border border-yellow-200 text-yellow-700 px-4 py-3 rounded-lg mb-6">
+        <AlertCircle className="w-5 h-5 inline-block mr-2" />
+        <div>
+          <h4 className="font-semibold mb-2">Complete Your Profile for Better Recommendations</h4>
+          <p className="text-sm">Add your <strong>{missingFields.join(', ')}</strong> to get personalized scholarship recommendations.</p>
+          <p className="text-sm mt-2">Go to the <strong>Profile</strong> tab to update your information.</p>
+        </div>
+      </div>
+    ) : null;
+  };
+
   const getRecommendations = async () => {
     setLoading(true);
     setError('');
-
+    
     try {
       const response = await fetch('/api/scholarships/recommend', {
         method: 'POST',
@@ -61,6 +90,44 @@ export default function ScholarshipRecommendations({ studentProfile }: Scholarsh
     }
   };
 
+  const generateRecommendations = (): Scholarship[] => {
+    if (!studentProfile.class || !studentProfile.state) {
+      return [];
+    }
+
+    const baseScholarships = [
+      {
+        scholarshipId: 'scholarship-1',
+        name: 'National Merit Scholarship',
+        score: 85,
+        explanation: `Based on your ${studentProfile.class} studies in ${studentProfile.state}, you qualify for merit-based scholarships.`,
+        requiredDocs: ['Mark sheets', 'Income certificate', 'Residence proof'],
+        link: '#',
+        deadline: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString()
+      },
+      {
+        scholarshipId: 'scholarship-2',
+        name: 'State Scholarship for ${studentProfile.category} Students',
+        score: 90,
+        explanation: `${studentProfile.state} government scholarship specifically for ${studentProfile.category} category students in ${studentProfile.class}.`,
+        requiredDocs: ['Domicile certificate', 'Category certificate', 'Academic records'],
+        link: '#',
+        deadline: new Date(Date.now() + 45 * 24 * 60 * 60 * 1000).toISOString()
+      },
+      {
+        scholarshipId: 'scholarship-3',
+        name: 'Central Sector Scholarship',
+        score: 75,
+        explanation: 'All-India scholarship scheme for meritorious students based on ${studentProfile.class} performance.',
+        requiredDocs: ['Aadhaar card', 'Bank account', 'Photograph'],
+        link: '#',
+        deadline: new Date(Date.now() + 60 * 24 * 60 * 60 * 1000).toISOString()
+      }
+    ];
+
+    return baseScholarships;
+  };
+
   const getScoreColor = (score: number) => {
     if (score >= 80) return 'bg-green-500';
     if (score >= 60) return 'bg-yellow-500';
@@ -79,6 +146,9 @@ export default function ScholarshipRecommendations({ studentProfile }: Scholarsh
 
   return (
     <div className="space-y-6">
+      {/* Profile Completeness Warning */}
+      {getProfileCompletenessWarning()}
+      
       {/* Header */}
       <div className="text-center mb-6">
         <h2 className="text-2xl font-bold text-gray-900 mb-2">
@@ -89,18 +159,19 @@ export default function ScholarshipRecommendations({ studentProfile }: Scholarsh
           Personalized scholarship suggestions based on your profile
         </p>
       </div>
-
+      
       {/* Get Recommendations Button */}
       <div className="text-center mb-6">
         <Button 
           onClick={getRecommendations}
-          disabled={loading}
+          disabled={loading || !isProfileComplete()}
           className="px-6 py-3"
         >
-          {loading ? 'Getting Recommendations...' : 'Get My Recommendations'}
+          {loading ? 'Getting Recommendations...' : 
+           !isProfileComplete() ? 'Complete Profile First' : 'Get My Recommendations'}
         </Button>
       </div>
-
+      
       {/* Error Message */}
       {error && (
         <div className="bg-red-50 border border border-red-200 text-red-700 px-4 py-3 rounded-lg mb-4">
@@ -108,7 +179,7 @@ export default function ScholarshipRecommendations({ studentProfile }: Scholarsh
           {error}
         </div>
       )}
-
+      
       {/* Recommendations */}
       {recommendations.length > 0 && (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
@@ -149,6 +220,26 @@ export default function ScholarshipRecommendations({ studentProfile }: Scholarsh
                   </div>
                 </div>
 
+                {/* Source Information */}
+                {scholarship.source?.name && (
+                  <div className="bg-blue-50 border border border-blue-200 text-blue-700 px-3 py-2 rounded-lg">
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center">
+                        <ExternalLink className="w-4 h-4 mr-2" />
+                        <span className="text-sm font-medium">Source: {scholarship.source.name}</span>
+                      </div>
+                      <Button 
+                        variant="outline" 
+                        size="sm"
+                        onClick={() => window.open(scholarship.source?.link || '#', '_blank')}
+                        className="text-xs"
+                      >
+                        Visit Source
+                      </Button>
+                    </div>
+                  </div>
+                )}
+
                 {/* Action Buttons */}
                 <div className="flex gap-2 pt-4">
                   <Button 
@@ -173,14 +264,25 @@ export default function ScholarshipRecommendations({ studentProfile }: Scholarsh
           ))}
         </div>
       )}
-
-      {/* No Recommendations */}
-      {!loading && recommendations.length === 0 && (
+      
+      {/* No Recommendations - Only show if truly no recommendations and profile is complete */}
+      {!loading && recommendations.length === 0 && isProfileComplete() && (
         <div className="text-center py-12">
           <div className="text-gray-500">
             <BookOpen className="w-12 h-12 mx-auto mb-4" />
-            <h3 className="text-lg font-semibold mb-2">No Recommendations Yet</h3>
-            <p>Complete your profile and click "Get My Recommendations" to see personalized scholarships.</p>
+            <h3 className="text-lg font-semibold mb-2">No Recommendations Available</h3>
+            <p>Our scholarship database is being updated. Please check back later for personalized recommendations.</p>
+          </div>
+        </div>
+      )}
+      
+      {/* Profile Incomplete - Show warning message */}
+      {!loading && !isProfileComplete() && (
+        <div className="text-center py-12">
+          <div className="text-gray-500">
+            <BookOpen className="w-12 h-12 mx-auto mb-4" />
+            <h3 className="text-lg font-semibold mb-2">Complete Your Profile First</h3>
+            <p>Please complete your profile information to get personalized scholarship recommendations.</p>
           </div>
         </div>
       )}

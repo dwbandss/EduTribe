@@ -9,12 +9,13 @@ import { Send, Bot, User, ExternalLink, Loader2 } from 'lucide-react';
 
 interface Message {
   id: string;
-  question: string;
-  answer: string;
-  sources: Array<{
+  type: 'user' | 'assistant';
+  content: string;
+  sources?: Array<{
     id: string;
     type: 'school' | 'scheme';
     title: string;
+    link?: string;
   }>;
   timestamp: string;
 }
@@ -52,15 +53,24 @@ export default function AdmissionAssistant({ studentProfile }: AdmissionAssistan
       const data = await response.json();
 
       if (data.success) {
-        const newMessage: Message = {
+        // Add user message
+        const userMessage: Message = {
           id: Date.now().toString(),
-          question: input,
-          answer: data.data.answer,
+          type: 'user',
+          content: input,
+          timestamp: new Date().toISOString()
+        };
+
+        // Add assistant message
+        const assistantMessage: Message = {
+          id: (Date.now() + 1).toString(),
+          type: 'assistant',
+          content: data.data.answer,
           sources: data.data.sources,
           timestamp: new Date().toISOString()
         };
 
-        setMessages(prev => [...prev, newMessage]);
+        setMessages(prev => [...prev, userMessage, assistantMessage]);
         setInput('');
       } else {
         console.error('Failed to get response');
@@ -85,30 +95,44 @@ export default function AdmissionAssistant({ studentProfile }: AdmissionAssistan
           {/* Messages */}
           <div className="space-y-4">
             {messages.map((message) => (
-              <div key={message.id} className="flex gap-3 p-3 bg-muted rounded-lg">
-                <div className="flex-shrink-0">
-                  <div className="w-8 h-8 bg-primary rounded-full flex items-center justify-center text-white">
-                    <User className="w-4 h-4" />
-                  </div>
-                </div>
-                <div className="flex-1">
-                  <div>
-                    <p className="font-medium text-sm text-primary mb-1">Q: {message.question}</p>
-                    <p className="text-sm whitespace-pre-wrap bg-background p-3 rounded border">
-                      {message.answer}
-                    </p>
-                  </div>
-                </div>
+              <div key={message.id} className={`flex gap-3 p-3 bg-muted rounded-lg ${message.type === 'user' ? 'justify-end' : ''}`}>
+                {message.type === 'user' ? (
+                  <>
+                    <div className="flex-1 text-right">
+                      <p className="text-sm whitespace-pre-wrap bg-background p-3 rounded border">
+                        {message.content}
+                      </p>
+                    </div>
+                    <div className="flex-shrink-0">
+                      <div className="w-8 h-8 bg-primary rounded-full flex items-center justify-center text-white">
+                        <User className="w-4 h-4" />
+                      </div>
+                    </div>
+                  </>
+                ) : (
+                  <>
+                    <div className="flex-shrink-0">
+                      <div className="w-8 h-8 bg-secondary rounded-full flex items-center justify-center text-white">
+                        <Bot className="w-4 h-4" />
+                      </div>
+                    </div>
+                    <div className="flex-1">
+                      <div className="text-sm whitespace-pre-wrap bg-background p-3 rounded border">
+                        {message.content}
+                      </div>
+                    </div>
+                  </>
+                )}
               </div>
             ))}
           </div>
 
           {/* Sources */}
-          {messages.length > 0 && messages[messages.length - 1].sources && (
+          {messages.length > 0 && messages[messages.length - 1].type === 'assistant' && messages[messages.length - 1].sources && (
             <div className="border-t pt-4">
               <h4 className="font-medium text-sm mb-2">Sources:</h4>
               <div className="space-y-2">
-                {messages[messages.length - 1].sources.map((source, index) => (
+                {messages[messages.length - 1].sources?.map((source, index) => (
                   <div key={index} className="flex items-center gap-2 p-2 bg-background border rounded-lg">
                     <Badge variant={source.type === 'school' ? 'default' : 'secondary'}>
                       {source.type}
@@ -118,10 +142,10 @@ export default function AdmissionAssistant({ studentProfile }: AdmissionAssistan
                       <Button
                         variant="outline"
                         size="sm"
-                        onClick={() => window.open(source.type === 'school' ? '/school-finder' : '#', '_blank')}
+                        onClick={() => window.open(source.link || '#', '_blank')}
                       >
                         <ExternalLink className="w-4 h-4 mr-2" />
-                        {source.type === 'school' ? 'View School' : 'Open Link'}
+                        {source.type === 'school' ? 'Visit Website' : 'Apply Now'}
                       </Button>
                     </div>
                   </div>

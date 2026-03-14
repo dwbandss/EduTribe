@@ -11,6 +11,7 @@ interface GeminiOptions {
   temperature?: number;
   maxTokens?: number;
   model?: string;
+  cache?: boolean;
 }
 
 interface CacheEntry {
@@ -178,10 +179,14 @@ export async function askGemini(prompt: string, options: GeminiOptions = {}): Pr
 
   // Check cache
   const cacheKey = getCacheKey(prompt, options);
-  const cached = await getCachedResponse(cacheKey);
-  if (cached) {
-    console.log('Cache hit for prompt');
-    return cached;
+  
+  // Skip cache if explicitly disabled
+  if (options.cache !== false) {
+    const cached = await getCachedResponse(cacheKey);
+    if (cached) {
+      console.log('Cache hit for prompt');
+      return cached;
+    }
   }
 
   try {

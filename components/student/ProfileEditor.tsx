@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -36,11 +36,58 @@ export default function ProfileEditor({ student, onUpdate }: ProfileEditorProps)
   const [profile, setProfile] = useState<StudentProfile>(student);
   const [isEditing, setIsEditing] = useState(false);
   const [hasChanges, setHasChanges] = useState(false);
+  const [isLoading, setIsLoading] = useState(false);
 
-  const handleSave = () => {
-    onUpdate(profile);
-    setIsEditing(false);
-    setHasChanges(false);
+  // Fetch profile from API on component mount
+  useEffect(() => {
+    const fetchProfile = async () => {
+      try {
+        const response = await fetch(`/api/profile?uid=${student.uid}`);
+        if (response.ok) {
+          const result = await response.json();
+          if (result.success && result.data) {
+            setProfile(result.data);
+            console.log('Profile loaded from database:', result.data);
+          }
+        }
+      } catch (error) {
+        console.error('Error loading profile:', error);
+      }
+    };
+
+    fetchProfile();
+  }, [student.uid]);
+
+  const handleSave = async () => {
+    setIsLoading(true);
+    try {
+      // Save to database
+      const response = await fetch('/api/profile', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(profile),
+      });
+
+      if (response.ok) {
+        const result = await response.json();
+        if (result.success) {
+          console.log('Profile saved successfully:', result.data);
+          onUpdate(result.data);
+          setIsEditing(false);
+          setHasChanges(false);
+        } else {
+          console.error('Failed to save profile:', result.message);
+        }
+      } else {
+        console.error('Error saving profile');
+      }
+    } catch (error) {
+      console.error('Error saving profile:', error);
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   const handleCancel = () => {
@@ -200,8 +247,8 @@ export default function ProfileEditor({ student, onUpdate }: ProfileEditorProps)
                 Cancel
               </Button>
 
-              <Button onClick={handleSave} disabled={!hasChanges}>
-                Save Changes
+              <Button onClick={handleSave} disabled={!hasChanges || isLoading}>
+                {isLoading ? 'Saving...' : 'Save Changes'}
               </Button>
             </div>
 

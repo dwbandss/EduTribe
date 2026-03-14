@@ -4,12 +4,13 @@ import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { BookOpen, GraduationCap, FileText, Users, Bot, LogOut, Home, User, Bell, Search, Award, MessageSquare } from 'lucide-react';
+import { BookOpen, GraduationCap, FileText, Users, LogOut, Home, User, Bell, Search, Award, MessageSquare } from 'lucide-react';
 import BackButton from '@/components/ui/BackButton';
-import CompactAIAssistant from '@/components/ui/CompactAIAssistant';
 import ScholarshipRecommendations from '@/components/scholarship/ScholarshipRecommendations';
 import ProfileEditor from '@/components/student/ProfileEditor';
+import SiteGuideBot from '@/components/ui/SiteGuideBot';
 import AdmissionAssistant from '@/components/ai/AdmissionAssistant';
+import ProfileCompletionPopup from '@/components/ui/ProfileCompletionPopup';
 
 interface StudentProfile {
   uid: string;
@@ -19,6 +20,12 @@ interface StudentProfile {
   class?: string;
   state?: string;
   category?: string;
+  studying?: string;
+  currentInstitution?: string;
+  targetCourses?: string;
+  income?: number;
+  marks?: number;
+  phone?: string;
 }
 
 const TabButton: React.FC<{ tab: { label: string; icon: React.ReactNode }; isActive: boolean; onClick: () => void }> = ({ tab, isActive, onClick }) => (
@@ -44,7 +51,13 @@ export default function StudentDashboard() {
   });
   const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState('overview');
+  const [showProfilePopup, setShowProfilePopup] = useState(false);
   const router = useRouter();
+
+  // Check if profile is complete
+  const isProfileComplete = () => {
+    return !!(student.class && student.state && student.category);
+  };
 
   useEffect(() => {
     const getUserFromAuth = async () => {
@@ -63,17 +76,35 @@ export default function StudentDashboard() {
         if (response.ok) {
           const userData = await response.json();
           if (userData.success) {
-            setStudent(userData.data);
+            // Fetch saved profile from database
+            const profileResponse = await fetch(`/api/profile?uid=${userData.data.uid}`);
+            if (profileResponse.ok) {
+              const profileData = await profileResponse.json();
+              if (profileData.success) {
+                setStudent({
+                  ...userData.data,
+                  ...profileData.data
+                });
+                console.log('🎓 Loaded saved profile from database:', profileData.data);
+                
+                // Check if profile is complete and show popup if not
+                if (!profileData.data.class || !profileData.data.state || !profileData.data.category) {
+                  setShowProfilePopup(true);
+                }
+              } else {
+                setStudent(userData.data);
+                // Show popup for new users with incomplete profiles
+                setShowProfilePopup(true);
+              }
+            } else {
+              setStudent(userData.data);
+              // Show popup for new users
+              setShowProfilePopup(true);
+            }
           }
         }
       } catch (error) {
         console.error('Error fetching user data:', error);
-        setStudent({
-          uid: 'EDU-STU-123456',
-          name: 'Demo Student',
-          email: 'demo@edutribe.com',
-          role: 'student'
-        });
       } finally {
         setLoading(false);
       }
@@ -278,8 +309,15 @@ export default function StudentDashboard() {
         </div>
       </div>
 
-      {/* AI Assistant */}
-      <CompactAIAssistant />
+      {/* Site Guide Bot */}
+      <SiteGuideBot />
+      
+      {/* Profile Completion Popup */}
+      <ProfileCompletionPopup 
+        isOpen={showProfilePopup}
+        onClose={() => setShowProfilePopup(false)}
+        onCompleteProfile={() => setActiveTab('profile')}
+      />
     </div>
   );
 }

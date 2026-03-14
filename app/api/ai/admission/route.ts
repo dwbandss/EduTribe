@@ -5,26 +5,9 @@ import { sampleSchools, sampleSchemes } from '@/data/sample-data';
 import { askGemini } from '@/lib/ai/gemini';
 import { z } from 'zod';
 
-// Initialize document store with sample data
-sampleSchools.forEach(school => {
-  documentStore.addDocument({
-    id: school.id,
-    text: school.text,
-    type: 'school',
-    title: school.name
-  });
-});
-
-sampleSchemes.forEach(scheme => {
-  documentStore.addDocument({
-    id: scheme.id,
-    text: scheme.text,
-    type: 'scheme',
-    title: scheme.name
-  });
-});
-
-console.log('Document store initialized with', documentStore.getAllDocuments().length, 'documents');
+// Simple rate limiting
+const rateLimitMap = new Map();
+const RATE_LIMIT = 50; // requests per hour per user (same as scholarship API)
 
 // Validation schema
 const AdmissionRequestSchema = z.object({
@@ -32,9 +15,24 @@ const AdmissionRequestSchema = z.object({
   studentProfile: z.object({
     class: z.string().optional(),
     state: z.string().optional(),
-    category: z.string().optional()
+    category: z.string().optional(),
+    uid: z.string().optional()
   })
 });
+
+function checkRateLimit(userId: string): boolean {
+  const now = Date.now();
+  const userRequests = rateLimitMap.get(userId) || [];
+  const recentRequests = userRequests.filter((time: number) => now - time < 3600000); // 1 hour in milliseconds
+  
+  if (recentRequests.length >= RATE_LIMIT) {
+    return false;
+  }
+  
+  // Clean old requests
+  rateLimitMap.set(userId, [...recentRequests, now]);
+  return true;
+}
 
 export async function POST(request: NextRequest) {
   try {
@@ -53,6 +51,14 @@ export async function POST(request: NextRequest) {
 
     const { question, studentProfile } = validation.data;
 
+    // Check rate limit (using student ID as userId)
+    if (!checkRateLimit(studentProfile.uid || 'anonymous')) {
+      return NextResponse.json(
+        { success: false, message: 'Rate limit exceeded. Please try again later.' },
+        { status: 429 }
+      );
+    }
+
     // Search for relevant documents
     const relevantDocs = documentStore.searchDocuments(question, 10);
 
@@ -66,7 +72,7 @@ export async function POST(request: NextRequest) {
 
     // Create AI prompt
     const prompt = `
-CRITICAL INSTRUCTION: You must answer the student's specific question using ONLY the provided documents. NO GENERIC RESPONSES.
+You are a helpful ADMISSION ASSISTANT for EduTribe platform. Be flexible and helpful.
 
 STUDENT'S EXACT QUESTION: "${question}"
 
@@ -78,32 +84,39 @@ STUDENT PROFILE:
 AVAILABLE DOCUMENTS:
 ${context}
 
-TASK: Answer the question "${question}" using ONLY the information from the documents above.
+TASK: Answer the student's question helpfully. Follow these guidelines:
+1. If question is about ADMISSIONS, SCHOOLS, or EDUCATIONAL INSTITUTIONS - answer normally
+2. If question mentions "passed from here" or similar - DON'T ask for documents, acknowledge their statement
+3. If question is about SCHOLARSHIPS - politely redirect to Scholarships tab
+4. If question is about CAREER GUIDANCE - provide helpful admission-related advice
+5. If question is NOT about admission - politely say you can only help with admission-related questions
+6. Be conversational and helpful, not overly strict
+7. Use available documents to provide accurate information
+8. If user says they passed from somewhere, accept their statement and don't question it
 
-RULES:
-1. DO NOT provide generic greetings or introductions
-2. DO NOT say "I can help with..." or "I'm here to assist..."
-3. DIRECTLY answer the specific question asked
-4. If documents contain the answer, use that information
-5. If documents DON'T contain the answer, say "I don't have information about that in the available documents"
-6. Reference specific document titles in your answer
+ADMISSION TOPICS:
+- School admissions and requirements
+- Application processes and deadlines  
+- Document requirements for admissions
+- Eligibility criteria
+- Entrance exams and preparation
+- College selection guidance
 
-EXAMPLE OF WRONG RESPONSE: "Hello! I can help you with scholarships..."
-EXAMPLE OF RIGHT RESPONSE: "Based on the documents, the KVPY scholarship deadline is..."
+Remember: Be helpful and flexible while staying focused on admission topics.
 
 RESPONSE FORMAT:
 {
-  "answer": "Direct answer to the question based on documents",
+  "answer": "Direct answer to admission question based on documents",
   "sources": [
-    {"id": "doc_id", "type": "school/scheme", "title": "Document Title"}
+    {"id": "doc_id", "type": "school/scheme", "title": "Document Title", "link": "https://actual-website.com"}
   ]
 }
 
-ANSWER THE QUESTION: "${question}"
+ANSWER THE ADMISSION QUESTION: "${question}"
 `;
 
-    // Get AI response
-    const aiText = await askGemini(prompt);
+    // Get AI response (with caching disabled for admission questions)
+    const aiText = await askGemini(prompt, { cache: false });
     
     if (!aiText) {
       return NextResponse.json(
