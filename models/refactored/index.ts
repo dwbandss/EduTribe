@@ -2,14 +2,12 @@
 import { User, type IUser, type UserRole } from './User';
 import { Student, type IStudent, type TribeCategory } from './Student';
 import { School, type ISchool, type VerificationStatus } from './SchoolSimple';
-import { Volunteer, type IVolunteer, type Skill, type Subject } from './Volunteer';
 import { NGO, type INGO, type FocusArea } from './NGOSimple';
 import { Donor, type IDonor, type DonorType } from './DonorSimple';
 import { Admin, type IAdmin, type Permission } from './AdminSimple';
 
 // Supporting Models
 import { Scholarship, type IScholarship, type Category } from './Scholarship';
-import { VolunteerRequest, type IVolunteerRequest, type RequestStatus } from './VolunteerRequest';
 import { DistrictAnalytics, type IDistrictAnalytics } from './DistrictAnalytics';
 import { SecurityLog, type ISecurityLog } from './SecurityLogs';
 
@@ -17,14 +15,12 @@ import { SecurityLog, type ISecurityLog } from './SecurityLogs';
 export { User, type IUser, type UserRole };
 export { Student, type IStudent, type TribeCategory };
 export { School, type ISchool, type VerificationStatus };
-export { Volunteer, type IVolunteer, type Skill, type Subject };
 export { NGO, type INGO, type FocusArea };
 export { Donor, type IDonor, type DonorType };
 export { Admin, type IAdmin, type Permission };
 
 // Supporting Models
 export { Scholarship, type IScholarship, type Category };
-export { VolunteerRequest, type IVolunteerRequest, type RequestStatus };
 export { DistrictAnalytics, type IDistrictAnalytics };
 export { SecurityLog, type ISecurityLog };
 
@@ -33,7 +29,6 @@ export interface ModelRelations {
   // User relationships
   user: {
     student?: IStudent;
-    volunteer?: IVolunteer;
     school?: ISchool;
     ngo?: INGO;
     donor?: IDonor;
@@ -44,10 +39,6 @@ export interface ModelRelations {
   student: {
     user: IUser;
     school?: ISchool;
-  };
-  
-  volunteer: {
-    user: IUser;
   };
   
   school: {
@@ -77,8 +68,6 @@ export class ModelOperations {
     switch (role) {
       case 'student':
         return await Student.findOne({ userId }).populate('user');
-      case 'volunteer':
-        return await Volunteer.findOne({ userId }).populate('user');
       case 'school':
         return await School.findOne({ userId }).populate('user');
       case 'ngo':
@@ -99,8 +88,6 @@ export class ModelOperations {
     switch (role) {
       case 'student':
         return await Student.create({ userId, ...profileData });
-      case 'volunteer':
-        return await Volunteer.create({ userId, ...profileData });
       case 'school':
         return await School.create({ userId, ...profileData });
       case 'ngo':
@@ -121,8 +108,6 @@ export class ModelOperations {
     switch (role) {
       case 'student':
         return await Student.findOneAndUpdate({ userId }, updateData, { new: true });
-      case 'volunteer':
-        return await Volunteer.findOneAndUpdate({ userId }, updateData, { new: true });
       case 'school':
         return await School.findOneAndUpdate({ userId }, updateData, { new: true });
       case 'ngo':
@@ -143,8 +128,6 @@ export class ModelOperations {
     switch (role) {
       case 'student':
         return await Student.findOneAndDelete({ userId });
-      case 'volunteer':
-        return await Volunteer.findOneAndDelete({ userId });
       case 'school':
         return await School.findOneAndDelete({ userId });
       case 'ngo':
@@ -172,16 +155,6 @@ export class ModelOperations {
           ]),
           byTribeCategory: await Student.aggregate([
             { $group: { _id: '$tribeCategory', count: { $sum: 1 } } }
-          ]),
-        };
-      case 'volunteer':
-        return {
-          total: await Volunteer.countDocuments(),
-          verified: await Volunteer.countDocuments({ verified: true }),
-          bySkills: await Volunteer.aggregate([
-            { $unwind: '$skills' },
-            { $group: { _id: '$skills', count: { $sum: 1 } } },
-            { $sort: { count: -1 } }
           ]),
         };
       case 'school':
@@ -230,7 +203,6 @@ export default {
   User,
   Student,
   School,
-  Volunteer,
   NGO,
   Donor,
   Admin,

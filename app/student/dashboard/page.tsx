@@ -4,13 +4,14 @@ import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { BookOpen, GraduationCap, FileText, Users, LogOut, Home, User, Bell, Search, Award, MessageSquare } from 'lucide-react';
+import { BookOpen, GraduationCap, FileText, Users, LogOut, Home, User, Bell, Search, Award, MessageSquare, Brain } from 'lucide-react';
 import BackButton from '@/components/ui/BackButton';
 import ScholarshipRecommendations from '@/components/scholarship/ScholarshipRecommendations';
 import ProfileEditor from '@/components/student/ProfileEditor';
 import SiteGuideBot from '@/components/ui/SiteGuideBot';
 import AdmissionAssistant from '@/components/ai/AdmissionAssistant';
 import ProfileCompletionPopup from '@/components/ui/ProfileCompletionPopup';
+import AITutor from '@/components/ai/AITutor';
 
 interface StudentProfile {
   uid: string;
@@ -123,6 +124,7 @@ export default function StudentDashboard() {
     { label: 'Overview', icon: <Home className="w-4 h-4" /> },
     { label: 'Admission Assistant', icon: <MessageSquare className="w-4 h-4" /> },
     { label: 'Scholarships', icon: <Award className="w-4 h-4" /> },
+    { label: 'AI Tutor', icon: <Brain className="w-4 h-4" /> },
     { label: 'Profile', icon: <User className="w-4 h-4" /> },
     { label: 'Notifications', icon: <Bell className="w-4 h-4" /> },
   ];
@@ -270,6 +272,10 @@ export default function StudentDashboard() {
                     />
                   </CardContent>
                 </Card>
+              )}
+
+              {activeTab === 'ai tutor' && (
+                <AITutor />
               )}
 
               {activeTab === 'profile' && (

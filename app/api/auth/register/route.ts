@@ -6,7 +6,7 @@ import mongoose from "mongoose";
 // Import models
 import { User } from "@/models/refactored";
 import { School } from "@/models/refactored/SchoolSimple";
-import { Volunteer } from "@/models/refactored/Volunteer";
+import { Volunteer } from "@/models/volunteer";
 import { Student } from "@/models/refactored/Student";
 import { NGO } from "@/models/refactored/NGOSimple";
 import { Donor } from "@/models/refactored/DonorSimple";
@@ -95,7 +95,20 @@ export async function POST(request: NextRequest) {
           schoolCode: schoolData.schoolCode || `SCH-${Date.now()}`,
           district: schoolData.district,
           state: schoolData.state,
-          verificationStatus: "pending",
+          location: {
+            type: 'Point',
+            coordinates: [85.8234, 22.7956] // Default coordinates for Odisha
+          },
+          facilities: {
+            hostel: false,
+            sports: false,
+            scienceLab: false,
+            digitalClassroom: false,
+            library: false,
+            computerLab: false
+          },
+          streamsOffered: [],
+          needs: [],
           contact: {
             phone: phone || "",
             email: email,
@@ -104,7 +117,8 @@ export async function POST(request: NextRequest) {
             district: schoolData.district,
             state: schoolData.state,
             pincode: ""
-          }
+          },
+          verificationStatus: "pending"
         });
         break;
       }
@@ -122,13 +136,36 @@ export async function POST(request: NextRequest) {
       }
 
       case "volunteer": {
-        await Volunteer.create({
+        const volunteerData = {
           userId: user._id,
+          name: validatedData.fullName,
+          email: email,
+          phone: phone || "",
+          location: {
+            type: "Point",
+            coordinates: [85.8234, 22.7956] // Default coordinates for Odisha
+          },
           skills: [],
-          subjects: [],
           languages: [],
-          verified: false,
-        });
+          availability: [
+            {
+              day: "Monday",
+              timeSlots: ["9:00-12:00", "14:00-17:00"]
+            }
+          ],
+          rating: 0,
+          profileVisibility: "public",
+          bio: "",
+          education: "",
+          experience: "",
+          isActive: true,
+          verified: false
+        };
+        
+        console.log('Creating volunteer with data:', volunteerData);
+        
+        // Use Volunteer.create() to avoid constructor issues
+        await Volunteer.create(volunteerData);
         break;
       }
 
