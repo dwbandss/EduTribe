@@ -1,26 +1,42 @@
 import { NextRequest, NextResponse } from 'next/server';
 import dbConnect from '@/lib/dbConnect';
-import { Scholarship } from '@/models/refactored/Scholarship';
+// Scholarship model doesn't exist yet, using placeholder
+// import { Scholarship } from '@/models/Scholarship';
 
 export async function POST(request: NextRequest) {
   try {
     await dbConnect();
     
-    const body = await request.json();
-    const scholarships = Array.isArray(body) ? body : [body];
-
-    const result = await Scholarship.insertMany(scholarships);
-    
+    // TODO: Implement when Scholarship model is created
     return NextResponse.json({
-      success: true,
-      message: `Added ${scholarships.length} scholarships`,
-      data: result
-    });
+      success: false,
+      message: "Scholarship model not implemented yet"
+    }, { status: 501 });
+    
   } catch (error) {
-    console.error('Add scholarships error:', error);
-    return NextResponse.json(
-      { success: false, message: 'Internal server error' },
-      { status: 500 }
-    );
+    console.error('Scholarship error:', error);
+    return NextResponse.json({
+      success: false,
+      message: "Internal server error"
+    }, { status: 500 });
+  }
+}
+
+export async function GET(request: NextRequest) {
+  try {
+    await dbConnect();
+    
+    // TODO: Implement when Scholarship model is created
+    return NextResponse.json({
+      success: false,
+      message: "Scholarship model not implemented yet"
+    }, { status: 501 });
+    
+  } catch (error) {
+    console.error('Scholarship error:', error);
+    return NextResponse.json({
+      success: false,
+      message: "Internal server error"
+    }, { status: 500 });
   }
 }

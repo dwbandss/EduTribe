@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import dbConnect from '@/lib/dbConnect';
-import { School } from '@/models/refactored/SchoolSimple';
+import { School } from '@/models/School';
 
 // Sample schools data
 const sampleSchools = [

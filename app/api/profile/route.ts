@@ -1,30 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
 import dbConnect from '@/lib/dbConnect';
+import { School, Volunteer, Student, NGO } from '@/models';
 import mongoose from 'mongoose';
-
-// MongoDB Schema for Student Profile
-const StudentProfileSchema = new mongoose.Schema({
-  uid: { type: String, required: true, unique: true },
-  name: { type: String, required: true },
-  email: { type: String, required: true },
-  role: { type: String, required: true },
-  class: { type: String },
-  state: { type: String },
-  category: { type: String },
-  studying: { type: String },
-  currentInstitution: { type: String },
-  targetCourses: { type: String },
-  income: { type: Number },
-  marks: { type: Number },
-  phone: { type: String },
-  address: { type: String },
-  createdAt: { type: Date, default: Date.now },
-  updatedAt: { type: Date, default: Date.now }
-});
-
-// Create or get the model
-const StudentProfile = mongoose.models.StudentProfile || mongoose.model('StudentProfile', StudentProfileSchema);
 
 // Validation schema for profile data
 const ProfileUpdateSchema = z.object({
@@ -35,12 +13,12 @@ const ProfileUpdateSchema = z.object({
   class: z.string().optional(),
   state: z.string().optional(),
   category: z.string().optional(),
-  studying: z.string().optional(),
   currentInstitution: z.string().optional(),
   targetCourses: z.string().optional(),
   income: z.number().optional(),
   marks: z.number().optional(),
   phone: z.string().optional(),
+  verified: z.boolean().optional(),
   address: z.string().optional()
 });
 
@@ -48,7 +26,6 @@ export async function POST(request: NextRequest) {
   try {
     await dbConnect();
     
-    // Parse and validate request body
     const body = await request.json();
     const validation = ProfileUpdateSchema.safeParse(body);
 
@@ -60,30 +37,76 @@ export async function POST(request: NextRequest) {
     }
 
     const profileData = validation.data;
+    const { uid, role, ...dataToSave } = profileData;
 
-    // Store profile data in MongoDB with upsert
-    const updatedProfile = await StudentProfile.findOneAndUpdate(
-      { uid: profileData.uid },
-      { 
-        ...profileData, 
-        updatedAt: new Date() 
-      },
-      { 
-        upsert: true, 
-        new: true, 
-        runValidators: true,
-        returnDocument: 'after'
+    let updatedProfile = null;
+
+    // Save to appropriate collection based on role
+    if (role === 'student') {
+      console.log('=== PROFILE SAVE DEBUG ===');
+      console.log('Saving student profile for uid:', uid);
+      console.log('Data to save:', dataToSave);
+      
+      // Check what exists before saving
+      const existingStudent = await Student.findOne({ uid });
+      console.log('Existing student in Student collection:', existingStudent ? 'EXISTS' : 'NOT EXISTS');
+      
+      // Update student profile with additional fields
+      updatedProfile = await Student.findOneAndUpdate(
+        { uid },
+        {
+          ...dataToSave,
+          updatedAt: new Date()
+        },
+        { new: true }
+      );
+      console.log('Updated student profile:', updatedProfile);
+      
+      // If updatedProfile is null, fetch the document to verify it was saved
+      if (!updatedProfile) {
+        console.log('UpdatedProfile is null, fetching to verify save...');
+        updatedProfile = await Student.findOne({ uid });
+        console.log('Fetched student profile after save:', updatedProfile);
       }
-    );
-    
-    console.log('Profile saved to MongoDB for user:', profileData.uid);
+      
+      // Verify the save
+      const verifyStudent = await Student.findOne({ uid });
+      console.log('Verification - Student data after save:', {
+        name: verifyStudent?.name,
+        state: verifyStudent?.state,
+        category: verifyStudent?.category,
+        class: verifyStudent?.class
+      });
+      
+      console.log('=== END SAVE DEBUG ===');
+    } else if (role === 'school') {
+      updatedProfile = await School.findOneAndUpdate(
+        { uid },
+        {
+          ...dataToSave,
+          updatedAt: new Date()
+        },
+        { new: true, upsert: true, runValidators: true }
+      );
+    } else if (role === 'volunteer') {
+      updatedProfile = await Volunteer.findOneAndUpdate(
+        { uid },
+        {
+          ...dataToSave,
+          updatedAt: new Date()
+        },
+        { new: true, upsert: true, runValidators: true }
+      );
+    }
+
+    console.log('Profile saved to MongoDB for user:', uid);
     console.log('Profile data:', profileData);
-    console.log('MongoDB document ID:', updatedProfile._id);
+    console.log('Final updatedProfile:', updatedProfile);
 
     return NextResponse.json({
       success: true,
       message: 'Profile saved successfully',
-      data: profileData
+      data: updatedProfile || profileData
     });
 
   } catch (error) {
@@ -101,6 +124,7 @@ export async function GET(request: NextRequest) {
     
     const { searchParams } = new URL(request.url);
     const uid = searchParams.get('uid');
+    const role = searchParams.get('role');
 
     if (!uid) {
       return NextResponse.json(
@@ -109,8 +133,50 @@ export async function GET(request: NextRequest) {
       );
     }
 
-    // Get profile data from MongoDB
-    const profile = await StudentProfile.findOne({ uid });
+    let profile = null;
+
+    if (role) {
+      switch (role) {
+        case 'school':
+          profile = await School.findOne({ uid }).lean();
+          if (profile) {
+            // Also fetch students under this school
+            const Student = await import('@/models/Student').then(m => m.Student);
+            const students = await Student.find({ schoolUid: uid }).lean();
+            profile.students = students || [];
+          }
+          break;
+        case 'volunteer':
+          profile = await Volunteer.findOne({ uid }).lean();
+          if (profile && profile.ngoUid) {
+            const ngo = await NGO.findOne({ ngoUid: profile.ngoUid }).lean();
+            if (ngo) {
+              profile.ngo = {
+                ngoUid: ngo.ngoUid,
+                ngoName: ngo.ngoName,
+                verifiedStatus: ngo.verifiedStatus
+              };
+            }
+          }
+          break;
+        case 'student':
+          profile = await Student.findOne({ uid }).lean();
+          break;
+        case 'ngo':
+          profile = await NGO.findOne({ ngoUid: uid }).lean();
+          break;
+        default:
+          return NextResponse.json(
+            { success: false, message: 'Invalid role' },
+            { status: 400 }
+          );
+      }
+    } else {
+      profile = await School.findOne({ uid }).lean() ||
+                await Volunteer.findOne({ uid }).lean() ||
+                await Student.findOne({ uid }).lean() ||
+                await NGO.findOne({ ngoUid: uid }).lean();
+    }
 
     if (!profile) {
       return NextResponse.json(
@@ -119,32 +185,12 @@ export async function GET(request: NextRequest) {
       );
     }
 
-    // Convert MongoDB document to plain object
-    const profileData = {
-      uid: profile.uid,
-      name: profile.name,
-      email: profile.email,
-      role: profile.role,
-      class: profile.class,
-      state: profile.state,
-      category: profile.category,
-      studying: profile.studying,
-      currentInstitution: profile.currentInstitution,
-      targetCourses: profile.targetCourses,
-      income: profile.income,
-      marks: profile.marks,
-      phone: profile.phone,
-      address: profile.address,
-      createdAt: profile.createdAt,
-      updatedAt: profile.updatedAt
-    };
-
     console.log('Profile fetched from MongoDB for user:', uid);
-    console.log('Profile data:', profileData);
+    console.log('Profile data:', profile);
 
     return NextResponse.json({
       success: true,
-      data: profileData
+      data: profile
     });
 
   } catch (error) {

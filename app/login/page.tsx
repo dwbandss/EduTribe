@@ -40,7 +40,15 @@ export default function LoginPage() {
 
       if (data.success) {
 
-        // store UID
+        // store user data
+        localStorage.setItem("user", JSON.stringify({
+          uid: data.uid,
+          role: data.role,
+          name: data.name,
+          email: data.email || ''
+        }));
+        
+        // store UID separately for backward compatibility
         localStorage.setItem("uid", data.uid);
 
         // store token only if returned

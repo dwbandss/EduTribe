@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
 import dbConnect from '@/lib/dbConnect';
-import { School } from '@/models/refactored/SchoolSimple';
+import { School } from '@/models/School';
 
 // Validation schema for search request
 const searchSchema = z.object({

@@ -22,10 +22,13 @@ function SignupContent() {
     role: preselectedRole || 'student', // Default to student if not preselected
     organizationName: '',
     schoolName: '',
-    schoolCode: '',
+    schoolUid: '', // Add schoolUid to form state
     district: '',
     state: '',
-    phone: ''
+    phone: '',
+    locality: '',
+    address: '',
+    description: ''
   });
 
   const [showPassword, setShowPassword] = useState(false);
@@ -44,7 +47,7 @@ function SignupContent() {
     { value: 'admin', label: 'Admin', icon: Shield, description: 'Platform administration' }
   ];
 
-  const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
+  const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) => {
     const { name, value } = e.target;
     setFormData(prev => ({ ...prev, [name]: value }));
   };
@@ -75,20 +78,7 @@ function SignupContent() {
       if (data.success) {
         setSuccess(data.message);
         setGeneratedUID(data.uid);
-        // Clear form
-        setFormData({
-          fullName: '',
-          email: '',
-          password: '',
-          confirmPassword: '',
-          role: '',
-          organizationName: '',
-          schoolName: '',
-          schoolCode: '',
-          district: '',
-          state: '',
-          phone: ''
-        });
+        // Don't clear form or auto-redirect - let user see the UID
       } else {
         setError(data.message || 'Registration failed');
       }
@@ -185,8 +175,8 @@ function SignupContent() {
                   </div>
                 </div>
 
-                {/* Basic Information */}
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                {/* Basic Information - Full Name hidden for schools, uses schoolName instead */}
+                {formData.role !== 'school' && (
                   <div className="space-y-2">
                     <label htmlFor="fullName" className="text-sm font-medium text-foreground">
                       Full Name *
@@ -198,48 +188,158 @@ function SignupContent() {
                       placeholder="Enter your full name"
                       value={formData.fullName}
                       onChange={handleChange}
-                      required
-                      className="bg-background border-border"
-                    />
-                  </div>
-
-                  <div className="space-y-2">
-                    <label htmlFor="email" className="text-sm font-medium text-foreground">
-                      Email Address
-                    </label>
-                    <Input
-                      id="email"
-                      name="email"
-                      type="email"
-                      placeholder="your@email.com"
-                      value={formData.email}
-                      onChange={handleChange}
-                      className="bg-background border-border"
-                    />
-                  </div>
-                </div>
-
-                {/* Role-specific fields */}
-                {formData.role === 'ngo' && (
-                  <div className="space-y-2">
-                    <label htmlFor="organizationName" className="text-sm font-medium text-foreground">
-                      Organization Name *
-                    </label>
-                    <Input
-                      id="organizationName"
-                      name="organizationName"
-                      type="text"
-                      placeholder="NGO name"
-                      value={formData.organizationName}
-                      onChange={handleChange}
-                      required
+                      required={formData.role !== 'school'}
                       className="bg-background border-border"
                     />
                   </div>
                 )}
 
+                <div className="space-y-2">
+                  <label htmlFor="email" className="text-sm font-medium text-foreground">
+                    Email Address
+                  </label>
+                  <Input
+                    id="email"
+                    name="email"
+                    type="email"
+                    placeholder="your@email.com"
+                    value={formData.email}
+                    onChange={handleChange}
+                    className="bg-background border-border"
+                  />
+                </div>
+
+                {/* Role-specific fields */}
+                {formData.role === 'student' && (
+                  <div className="space-y-4">
+                    <div className="bg-blue-50 p-3 rounded-lg border border-blue-200">
+                      <p className="text-sm text-blue-800">
+                        <strong>Required for Student:</strong> Full Name, School UID (ask your school for this)
+                      </p>
+                    </div>
+                    <div className="space-y-2">
+                      <label htmlFor="schoolUid" className="text-sm font-medium text-foreground">
+                        School UID <span className="text-red-500">*</span>
+                      </label>
+                      <Input
+                        id="schoolUid"
+                        name="schoolUid"
+                        type="text"
+                        placeholder="Enter your school UID (get this from your school)"
+                        value={formData.schoolUid}
+                        onChange={handleChange}
+                        className="bg-background border-border"
+                        required
+                      />
+                    </div>
+                  </div>
+                )}
+
+                {formData.role === 'volunteer' && (
+                  <div className="space-y-4">
+                    <div className="bg-blue-50 p-3 rounded-lg border border-blue-200">
+                      <p className="text-sm text-blue-800">
+                        <strong>Required for Volunteer:</strong> Full Name
+                      </p>
+                    </div>
+                  </div>
+                )}
+
+                {formData.role === 'ngo' && (
+                  <div className="space-y-4">
+                    <div className="bg-blue-50 p-3 rounded-lg border border-blue-200">
+                      <p className="text-sm text-blue-800">
+                        <strong>Required for NGO:</strong> Organization Name, District, Locality, Address, Description
+                      </p>
+                    </div>
+                    <div className="space-y-2">
+                      <label htmlFor="organizationName" className="text-sm font-medium text-foreground">
+                        Organization Name *
+                      </label>
+                      <Input
+                        id="organizationName"
+                        name="organizationName"
+                        type="text"
+                        placeholder="NGO name"
+                        value={formData.organizationName}
+                        onChange={handleChange}
+                        required
+                        className="bg-background border-border"
+                      />
+                    </div>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      <div className="space-y-2">
+                        <label htmlFor="district" className="text-sm font-medium text-foreground">
+                          District *
+                        </label>
+                        <Input
+                          id="district"
+                          name="district"
+                          type="text"
+                          placeholder="District"
+                          value={formData.district}
+                          onChange={handleChange}
+                          required
+                          className="bg-background border-border"
+                        />
+                      </div>
+                      <div className="space-y-2">
+                        <label htmlFor="locality" className="text-sm font-medium text-foreground">
+                          Locality/Area *
+                        </label>
+                        <Input
+                          id="locality"
+                          name="locality"
+                          type="text"
+                          placeholder="Locality or area"
+                          value={formData.locality}
+                          onChange={handleChange}
+                          required
+                          className="bg-background border-border"
+                        />
+                      </div>
+                    </div>
+                    <div className="space-y-2">
+                      <label htmlFor="address" className="text-sm font-medium text-foreground">
+                        Address *
+                      </label>
+                      <Input
+                        id="address"
+                        name="address"
+                        type="text"
+                        placeholder="Full address"
+                        value={formData.address}
+                        onChange={handleChange}
+                        required
+                        className="bg-background border-border"
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <label htmlFor="description" className="text-sm font-medium text-foreground">
+                        Description * <span className="text-xs text-muted-foreground">(min 10 characters)</span>
+                      </label>
+                      <textarea
+                        id="description"
+                        name="description"
+                        placeholder="Describe your NGO's mission and activities..."
+                        value={formData.description}
+                        onChange={handleChange}
+                        required
+                        minLength={10}
+                        className="w-full min-h-[100px] p-3 border border-border rounded-md bg-background text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary focus:border-primary resize-none"
+                      />
+                    </div>
+                  </div>
+                )}
+
                 {formData.role === 'school' && (
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div className="space-y-4">
+                    <div className="bg-blue-50 p-3 rounded-lg border border-blue-200">
+                      <p className="text-sm text-blue-800">
+                        <strong>Required for School:</strong> School Name, District, State
+                      </p>
+                    </div>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <div className="space-y-2">
                       <label htmlFor="schoolName" className="text-sm font-medium text-foreground">
                         School Name *
@@ -252,21 +352,6 @@ function SignupContent() {
                         value={formData.schoolName}
                         onChange={handleChange}
                         required
-                        className="bg-background border-border"
-                      />
-                    </div>
-
-                    <div className="space-y-2">
-                      <label htmlFor="schoolCode" className="text-sm font-medium text-foreground">
-                        School Code
-                      </label>
-                      <Input
-                        id="schoolCode"
-                        name="schoolCode"
-                        type="text"
-                        placeholder="School code"
-                        value={formData.schoolCode}
-                        onChange={handleChange}
                         className="bg-background border-border"
                       />
                     </div>
@@ -301,6 +386,7 @@ function SignupContent() {
                         required
                         className="bg-background border-border"
                       />
+                      </div>
                     </div>
                   </div>
                 )}

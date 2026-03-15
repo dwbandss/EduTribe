@@ -1,8 +1,8 @@
-import { connectDB } from "../../../../lib/mongodb";
+import { connectDB } from "@/lib/mongodb";
 import jwt from "jsonwebtoken";
 import { z } from "zod";
 import { NextResponse } from "next/server";
-import { User } from "../../../../models/refactored";
+import { User } from "@/models/User";
 
 const forgotPasswordSchema = z.object({
   email: z.string().email("Invalid email address"),

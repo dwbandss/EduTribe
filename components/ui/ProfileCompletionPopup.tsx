@@ -8,7 +8,7 @@ import { AlertCircle, X } from 'lucide-react';
 interface ProfileCompletionPopupProps {
   isOpen: boolean;
   onClose: () => void;
-  onCompleteProfile: () => void;
+  onCompleteProfile?: () => void;
 }
 
 export default function ProfileCompletionPopup({ isOpen, onClose, onCompleteProfile }: ProfileCompletionPopupProps) {
@@ -55,7 +55,7 @@ export default function ProfileCompletionPopup({ isOpen, onClose, onCompleteProf
             </Button>
             <Button 
               onClick={() => {
-                onCompleteProfile();
+                onCompleteProfile?.();
                 onClose();
               }}
               className="flex-1"

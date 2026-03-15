@@ -22,45 +22,52 @@ interface StudentProfile {
   class?: string;
   state?: string;
   category?: string;
-  studying?: string;
   currentInstitution?: string;
   targetCourses?: string;
+  income?: number;
+  marks?: number;
+  phone?: string;
+  schoolData?: any;
+  [key: string]: any;
 }
 
 interface ProfileEditorProps {
-  student: StudentProfile;
-  onUpdate: (updatedProfile: StudentProfile) => void;
+  student?: StudentProfile;
+  onUpdate?: (updatedProfile: StudentProfile | undefined) => void;
 }
 
+const defaultProfile: StudentProfile = {
+  uid: '',
+  name: '',
+  email: '',
+  role: 'student',
+  class: '',
+  state: '',
+  category: '',
+  currentInstitution: '',
+  targetCourses: '',
+};
+
 export default function ProfileEditor({ student, onUpdate }: ProfileEditorProps) {
-  const [profile, setProfile] = useState<StudentProfile>(student);
+  const [profile, setProfile] = useState<StudentProfile>(student || defaultProfile);
   const [isEditing, setIsEditing] = useState(false);
   const [hasChanges, setHasChanges] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
 
-  // Fetch profile from API on component mount
+  // Update local profile when prop changes
   useEffect(() => {
-    const fetchProfile = async () => {
-      try {
-        const response = await fetch(`/api/profile?uid=${student.uid}`);
-        if (response.ok) {
-          const result = await response.json();
-          if (result.success && result.data) {
-            setProfile(result.data);
-            console.log('Profile loaded from database:', result.data);
-          }
-        }
-      } catch (error) {
-        console.error('Error loading profile:', error);
-      }
-    };
-
-    fetchProfile();
-  }, [student.uid]);
+    if (student) {
+      setProfile({
+        ...defaultProfile,
+        ...student
+      });
+    }
+  }, [student]);
 
   const handleSave = async () => {
     setIsLoading(true);
     try {
+      console.log('Saving profile data:', profile);
       // Save to database
       const response = await fetch('/api/profile', {
         method: 'POST',
@@ -72,16 +79,30 @@ export default function ProfileEditor({ student, onUpdate }: ProfileEditorProps)
 
       if (response.ok) {
         const result = await response.json();
+        console.log('Save response:', result);
         if (result.success) {
-          console.log('Profile saved successfully:', result.data);
-          onUpdate(result.data);
+          console.log('Setting profile to:', result.data);
+          setProfile(result.data);
           setIsEditing(false);
           setHasChanges(false);
+          
+          // Create the complete updated profile to pass to parent
+          const updatedProfile = {
+            ...student,
+            ...profile, // Use the local profile state which has the latest changes
+            ...result.data, // Merge with any server response data
+          };
+          
+          console.log('Calling onUpdate with complete updated profile:', updatedProfile);
+          onUpdate?.(updatedProfile);
+          
+          // Show success message
+          alert('Profile saved successfully!');
         } else {
-          console.error('Failed to save profile:', result.message);
+          alert('Error saving profile: ' + (result.message || 'Unknown error'));
         }
       } else {
-        console.error('Error saving profile');
+        alert('Error saving profile: Server error');
       }
     } catch (error) {
       console.error('Error saving profile:', error);
@@ -91,7 +112,7 @@ export default function ProfileEditor({ student, onUpdate }: ProfileEditorProps)
   };
 
   const handleCancel = () => {
-    setProfile(student);
+    setProfile((prev) => prev);
     setIsEditing(false);
     setHasChanges(false);
   };
@@ -111,9 +132,9 @@ export default function ProfileEditor({ student, onUpdate }: ProfileEditorProps)
     'Tamil Nadu','Telangana','Tripura','Uttar Pradesh','Uttarakhand','West Bengal'
   ];
 
-  const categories = ['General','OBC','SC','ST','EWS'];
+  const categories = ['General','OBC','SC','ST','EWS','PWD'];
 
-  const classes = ['8th','9th','10th','11th','12th','Graduate','Post Graduate'];
+  const classes = ['1st','2nd','3rd','4th','5th','6th','7th','8th','9th','10th','11th','12th'];
 
   return (
     <Card className="w-full">
@@ -205,16 +226,6 @@ export default function ProfileEditor({ student, onUpdate }: ProfileEditorProps)
                 </Select>
               </div>
 
-              {/* Currently Studying */}
-              <div className="space-y-2">
-                <Label>Currently Studying</Label>
-                <Input
-                  value={profile.studying || ''}
-                  onChange={(e) => handleInputChange('studying', e.target.value)}
-                  placeholder="What are you currently studying?"
-                />
-              </div>
-
               {/* Institution */}
               <div className="space-y-2">
                 <Label>Current Institution</Label>
@@ -282,7 +293,6 @@ export default function ProfileEditor({ student, onUpdate }: ProfileEditorProps)
                 </h4>
 
                 <div className="space-y-2">
-                  <div><span className="font-medium">Currently Studying:</span> {profile.studying || 'Not specified'}</div>
                   <div><span className="font-medium">Current Institution:</span> {profile.currentInstitution || 'Not specified'}</div>
                   <div><span className="font-medium">Target Courses:</span> {profile.targetCourses || 'Not specified'}</div>
                 </div>

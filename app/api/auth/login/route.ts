@@ -1,14 +1,17 @@
-import { NextRequest, NextResponse } from "next/server";
-import { z } from "zod";
-import bcrypt from "bcryptjs";
-import jwt from "jsonwebtoken";
-import mongoose from "mongoose";
+import { NextRequest, NextResponse } from 'next/server';
+import { z } from 'zod';
+import bcrypt from 'bcryptjs';
+import jwt from 'jsonwebtoken';
+import mongoose from 'mongoose';
 
 // Import models
-import { User } from "@/models/refactored";
+import { User } from '@/models/User';
+
+// Import JWT utilities
+import { signToken } from '@/lib/auth/jwt';
 
 // Import database connection
-import dbConnect from "@/lib/dbConnect";
+import dbConnect from '@/lib/dbConnect';
 
 // Validation Schema - supports both email and UID login
 const loginSchema = z.object({
@@ -75,7 +78,17 @@ export async function POST(request: NextRequest) {
     }
 
     // Compare password
-    const isMatch = await bcrypt.compare(password, user.password);
+    if (!user.password) {
+      return NextResponse.json(
+        {
+          success: false,
+          message: "Invalid credentials. Please register again."
+        },
+        { status: 401 }
+      );
+    }
+
+    const isMatch = await user.comparePassword(password);
 
     if (!isMatch) {
       return NextResponse.json(
@@ -87,23 +100,18 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Generate JWT
-    const token = jwt.sign(
-      {
-        userId: user._id,
-        role: user.role,
-        uid: user.uid
-      },
-      JWT_SECRET,
-      { expiresIn: "7d" }
-    );
+    // Generate JWT token
+    const token = signToken({
+      uid: user.uid,
+      role: user.role,
+      userId: user._id
+    });
 
+    // Create response with HTTP-only cookie
     const response = NextResponse.json(
       {
         success: true,
         message: "Login successful",
-        token,
-        userId: user._id,
         role: user.role,
         name: user.name,
         uid: user.uid
@@ -111,10 +119,14 @@ export async function POST(request: NextRequest) {
       { status: 200 }
     );
 
-    response.headers.append(
-      "Set-Cookie",
-      `token=${token}; HttpOnly; Path=/; Max-Age=${60 * 60 * 24 * 7}; SameSite=Strict`
-    );
+    // Set HTTP-only cookie
+    response.cookies.set("token", token, {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === "production",
+      sameSite: "lax",
+      path: "/",
+      maxAge: 7 * 24 * 60 * 60 // 7 days in seconds
+    });
 
     return response;
 
