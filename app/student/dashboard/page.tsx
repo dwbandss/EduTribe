@@ -5,7 +5,7 @@ import { useRouter } from 'next/navigation';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { Search, User, Home, Award, LogOut, Brain, GraduationCap, Building, Users, Star, RefreshCw } from 'lucide-react';
+import { Search, User, Home, Award, LogOut, Brain, GraduationCap, Building, Users, Star, RefreshCw, Clock, MapPin } from 'lucide-react';
 import BackButton from '@/components/ui/BackButton';
 import ScholarshipRecommendations from '@/components/scholarship/ScholarshipRecommendations';
 import ProfileEditor from '@/components/student/ProfileEditor';
@@ -30,6 +30,19 @@ interface StudentProfile {
   phone?: string;
   schoolData?: any;
   [key: string]: any;
+}
+
+interface StudentSession {
+  sessionId: string;
+  subject: string;
+  volunteer: string;
+  schedule: {
+    day: string;
+    time: string;
+  };
+  location: string;
+  status: 'scheduled' | 'active' | 'completed' | 'cancelled';
+  mode: 'offline';
 }
 
 interface VolunteerMentor {
@@ -58,6 +71,7 @@ export default function StudentDashboard() {
   const router = useRouter();
   const [student, setStudent] = useState<StudentProfile | null>(null);
   const [volunteerMentor, setVolunteerMentor] = useState<VolunteerMentor | null>(null);
+  const [sessions, setSessions] = useState<StudentSession[]>([]);
   const [requests, setRequests] = useState([]);
   const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState('overview');
@@ -93,6 +107,33 @@ export default function StudentDashboard() {
 
     loadProfile();
   }, []);
+
+  // Load sessions when student profile is loaded
+  useEffect(() => {
+    if (student) {
+      loadSessions();
+    }
+  }, [student]);
+
+  const loadSessions = async () => {
+    try {
+      const token = localStorage.getItem('token');
+      const response = await fetch('/api/student/sessions', {
+        headers: {
+          'Authorization': `Bearer ${token}`
+        }
+      });
+      
+      if (response.ok) {
+        const data = await response.json();
+        if (data.success) {
+          setSessions(data.sessions);
+        }
+      }
+    } catch (error) {
+      console.error('Error loading sessions:', error);
+    }
+  };
 
   const fetchVolunteerMentor = async (studentUid: string) => {
     try {
@@ -270,6 +311,60 @@ export default function StudentDashboard() {
                       Your student dashboard is ready! Explore your profile, find volunteer mentors, 
                       and access AI-powered learning tools.
                     </p>
+                  </CardContent>
+                </Card>
+
+                {/* Upcoming Volunteer Classes */}
+                <Card>
+                  <CardHeader>
+                    <CardTitle className="flex items-center gap-2">
+                      <Users className="w-5 h-5" />
+                      Upcoming Volunteer Classes
+                    </CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    {sessions.length === 0 ? (
+                      <div className="text-center py-8">
+                        <Users className="w-12 h-12 mx-auto text-gray-400 mb-4" />
+                        <p className="text-gray-500">No volunteer classes scheduled yet.</p>
+                        <p className="text-sm text-gray-400">Volunteer teaching sessions will appear here once scheduled.</p>
+                      </div>
+                    ) : (
+                      <div className="space-y-4">
+                        {sessions.map((session) => (
+                          <div key={session.sessionId} className="border rounded-lg p-4">
+                            <div className="flex justify-between items-start mb-2">
+                              <div>
+                                <h3 className="font-semibold">{session.subject}</h3>
+                                <p className="text-sm text-gray-600">Volunteer: {session.volunteer}</p>
+                              </div>
+                              <Badge className={
+                                session.status === 'scheduled' ? 'bg-blue-100 text-blue-800' :
+                                session.status === 'active' ? 'bg-green-100 text-green-800' :
+                                session.status === 'completed' ? 'bg-gray-100 text-gray-800' :
+                                'bg-red-100 text-red-800'
+                              }>
+                                {session.status}
+                              </Badge>
+                            </div>
+                            <div className="flex items-center gap-4 text-sm text-gray-600">
+                              <div className="flex items-center gap-1">
+                                <Clock className="w-4 h-4" />
+                                {session.schedule.day} at {session.schedule.time}
+                              </div>
+                              <div className="flex items-center gap-1">
+                                <MapPin className="w-4 h-4" />
+                                {session.location}
+                              </div>
+                              <div className="flex items-center gap-1">
+                                <Home className="w-4 h-4" />
+                                {session.mode}
+                              </div>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    )}
                   </CardContent>
                 </Card>
               </div>

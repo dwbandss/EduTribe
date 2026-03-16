@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import Link from "next/link";
-import { Eye, EyeOff, BookOpen } from "lucide-react";
+import { Eye, EyeOff, BookOpen, Shield } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -51,6 +51,12 @@ export default function LoginPage() {
         // store UID separately for backward compatibility
         localStorage.setItem("uid", data.uid);
 
+        // Debug logging
+        console.log('=== LOGIN PAGE RESPONSE ===');
+        console.log('Data received:', data);
+        console.log('Role received:', data.role);
+        console.log('==========================');
+
         // store token only if returned
         if (data.token) {
           localStorage.setItem("token", data.token);
@@ -67,9 +73,8 @@ export default function LoginPage() {
             window.location.href = "/school/dashboard";
             break;
 
-          case "volunteer":
           case "ngo":
-            window.location.href = "/volunteer/dashboard";
+            window.location.href = "/ngo/dashboard";
             break;
 
           case "donor":
@@ -78,6 +83,10 @@ export default function LoginPage() {
 
           case "student":
             window.location.href = "/student/dashboard";
+            break;
+
+          case "volunteer":
+            window.location.href = "/volunteer/dashboard";
             break;
 
           default:
@@ -245,6 +254,21 @@ export default function LoginPage() {
                 Forgot your password?
               </Link>
 
+            </div>
+
+            {/* Admin Login */}
+
+            <div className="mt-6 text-center border-t pt-6">
+              <p className="text-sm text-muted-foreground mb-2">
+                Are you an administrator?
+              </p>
+              <button
+                onClick={() => window.location.href = '/admin/login'}
+                className="inline-flex items-center gap-2 text-sm bg-primary text-primary-foreground px-4 py-2 rounded-md hover:bg-primary/90 transition-colors"
+              >
+                <Shield className="w-4 h-4" />
+                Admin Login
+              </button>
             </div>
 
           </CardContent>

@@ -6,7 +6,7 @@ import mongoose from "mongoose";
 // Import models
 import { User } from '@/models/User';
 import { School } from '@/models/School';
-import { Volunteer } from '@/models/VolunteerNew';
+import { Volunteer } from '@/models/Volunteer';
 import { Student } from '@/models/Student';
 import { NGO } from '@/models/NGO';
 import { Donor } from '@/models/Donor';
@@ -56,7 +56,7 @@ const roleValidation = {
   }),
   ngo: z.object({
     organizationName: z.string().min(2, "Organization name is required"),
-    phone: z.string().optional(),
+    phone: z.string().min(10, "Phone number is required"),
     district: z.string().min(2, "District is required"),
     locality: z.string().min(2, "Locality is required"),
     address: z.string().min(5, "Address is required"),
@@ -190,18 +190,28 @@ export async function POST(request: NextRequest) {
         case "ngo": {
           // Validate NGO-specific fields
           const ngoData = roleValidation.ngo.parse(validatedData);
+          console.log('=== NGO DATA ===');
+          console.log('UID:', uid);
+          console.log('NGO Data:', ngoData);
+          console.log('Email:', email);
+          console.log('Phone:', phone);
           
-          await NGO.create([{
+          const ngoCreateData = {
             ngoUid: uid,
             ngoName: ngoData.organizationName,
             email: email,
-            phone: ngoData.phone || phone || "",
+            phone: ngoData.phone, // Use phone from ngoData
             district: ngoData.district,
             locality: ngoData.locality,
             address: ngoData.address,
             description: ngoData.description,
-            verifiedStatus: "pending"
-          }], { session });
+            verifiedStatus: "pending",
+            registrationNumber: `REG-${Date.now()}` // Generate unique registration number
+          };
+          console.log('NGO Create Data:', ngoCreateData);
+          
+          await NGO.create([ngoCreateData], { session });
+          console.log('NGO created successfully');
           break;
         }
 
@@ -273,8 +283,14 @@ export async function POST(request: NextRequest) {
       console.log("=== TRANSACTION ABORTED DUE TO ERROR ===");
       
       console.error("Registration failed:", error);
+      // Return more detailed error for debugging
       return NextResponse.json(
-        { success: false, message: 'Registration failed. Please try again.' },
+        { 
+          success: false, 
+          message: 'Registration failed. Please try again.',
+          error: error instanceof Error ? error.message : 'Unknown error',
+          stack: process.env.NODE_ENV === 'development' && error instanceof Error ? error.stack : undefined
+        },
         { status: 500 }
       );
     } finally {

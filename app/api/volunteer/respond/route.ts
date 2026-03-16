@@ -1,8 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
 import dbConnect from '@/lib/dbConnect';
-import { VolunteerMatch } from '@/models/volunteer';
-import { SchoolRequest } from '@/models/volunteer';
+import { VolunteerMatch } from '@/models/types/volunteer-match';
+import VolunteerRequestModelExport, { SchoolRequest } from '@/models/VolunteerRequest';
 
 // Validation schema
 const RespondToMatchSchema = z.object({
@@ -50,7 +50,7 @@ export async function POST(request: NextRequest) {
 
     // If accepted, update school request status to in_progress
     if (action === 'accept') {
-      await SchoolRequest.findOneAndUpdate(
+      await VolunteerRequestModelExport.findOneAndUpdate(
         { requestId: match.requestId },
         { status: 'in_progress' }
       );

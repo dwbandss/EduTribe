@@ -1,8 +1,8 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { Card, CardContent, CardHeader, CardTitle } from 'd:/EduTribe/components/ui/card';
-import { Badge } from 'd:/EduTribe/components/ui/badge';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Badge } from '@/components/ui/badge';
 import { Users, DollarSign, TrendingUp } from 'lucide-react';
 
 interface DonorStats {

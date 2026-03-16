@@ -1,8 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
 import dbConnect from '@/lib/dbConnect';
-import { Volunteer } from '@/models/volunteer';
-import { SchoolRequest, VolunteerMatch } from '@/models/volunteer';
+import { Volunteer } from '@/models/Volunteer';
+import VolunteerRequestModelExport, { VolunteerRequestModel as SchoolRequest } from '@/models/VolunteerRequest';
+import { VolunteerMatch } from '@/models/types/volunteer-match';
 import { askGemini } from '@/lib/ai/gemini';
 
 // Rate limiting
@@ -86,7 +87,7 @@ export async function POST(request: NextRequest) {
     const { requestId } = validation.data;
 
     // Fetch the school request
-    const schoolRequest = await SchoolRequest.findOne({ requestId, status: 'open' });
+    const schoolRequest = await VolunteerRequestModelExport.findOne({ requestId, status: 'open' });
     if (!schoolRequest) {
       return NextResponse.json(
         { success: false, message: 'Request not found or already closed' },

@@ -3,7 +3,7 @@ import dbConnect from "@/lib/dbConnect";
 
 import { NGO } from "@/models/NGO";
 import { School } from "@/models/School";
-import { Volunteer } from "@/models/VolunteerNew";
+import { Volunteer } from "@/models/Volunteer";
 import { Student } from "@/models/Student";
 import { Donor } from "@/models/Donor";
 

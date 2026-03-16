@@ -10,6 +10,14 @@ export interface JwtPayload {
   name?: string;
   email?: string;
   phone?: string;
+  volunteerType?: string;  // For volunteer type (ngo/independent)
+  ngoUid?: string;         // For NGO volunteers
+  adminVerified?: boolean; // For independent volunteers
+  volunteerUid?: string;  // For new architecture
+  verified?: boolean;     // For new architecture
+  status?: string;        // For new architecture
+  type?: string;          // For new architecture
+  adminRole?: string;     // For admin role
   iat?: number;
   exp?: number;
 }

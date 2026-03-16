@@ -90,7 +90,7 @@ export async function POST(request: NextRequest) {
       );
     } else if (role === 'volunteer') {
       updatedProfile = await Volunteer.findOneAndUpdate(
-        { uid },
+        { volunteerUid: uid },
         {
           ...dataToSave,
           updatedAt: new Date()
@@ -147,7 +147,7 @@ export async function GET(request: NextRequest) {
           }
           break;
         case 'volunteer':
-          profile = await Volunteer.findOne({ uid }).lean();
+          profile = await Volunteer.findOne({ volunteerUid: uid }).lean();
           if (profile && profile.ngoUid) {
             const ngo = await NGO.findOne({ ngoUid: profile.ngoUid }).lean();
             if (ngo) {
@@ -173,7 +173,7 @@ export async function GET(request: NextRequest) {
       }
     } else {
       profile = await School.findOne({ uid }).lean() ||
-                await Volunteer.findOne({ uid }).lean() ||
+                await Volunteer.findOne({ volunteerUid: uid }).lean() ||
                 await Student.findOne({ uid }).lean() ||
                 await NGO.findOne({ ngoUid: uid }).lean();
     }

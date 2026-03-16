@@ -65,5 +65,11 @@ const VolunteerRequestSchema = new Schema<IVolunteerRequest>({
 VolunteerRequestSchema.index({ state: 1, district: 1, status: 1 });
 VolunteerRequestSchema.index({ schoolUid: 1, status: 1 });
 
-export const VolunteerRequest = mongoose.models.VolunteerRequest || mongoose.model('VolunteerRequest', VolunteerRequestSchema);
-export default VolunteerRequest;
+// Export Volunteer Request model with multiple names for compatibility
+export const VolunteerRequestModelExport = mongoose.models.VolunteerRequest || mongoose.model('VolunteerRequest', VolunteerRequestSchema);
+export default VolunteerRequestModelExport;
+
+// Export named exports for compatibility
+export type { IVolunteerRequest as SchoolRequest };
+export type { IVolunteerRequest as VolunteerRequest };
+export { VolunteerRequestModelExport as VolunteerRequestModel };

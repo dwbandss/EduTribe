@@ -3,6 +3,7 @@ import { verifyToken, type JwtPayload } from '@/lib/auth/jwt';
 import dbConnect from '@/lib/dbConnect';
 import mongoose from 'mongoose';
 import { User } from '@/models/User';
+import { Volunteer } from "@/models/Volunteer";
 
 export async function GET(request: NextRequest) {
   try {
@@ -154,7 +155,7 @@ export async function GET(request: NextRequest) {
         };
       }
     } else if (user.role === 'volunteer') {
-      const Volunteer = await import('@/models/VolunteerNew').then(m => m.Volunteer);
+      const Volunteer = await import('@/models/Volunteer').then(m => m.Volunteer);
       const volunteer = await Volunteer.findOne({ uid: user.uid });
       if (volunteer) {
         profileData = {

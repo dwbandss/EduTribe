@@ -11,7 +11,7 @@ export interface IStudent extends Document {
   name: string;
   email: string;
   schoolUid: string;
-
+  ngoUid: string; // Link to NGO
   class?: string;
   state?: string;
   category?: string;
@@ -63,7 +63,11 @@ const StudentSchema = new Schema<IStudent>(
       required: true,
       index: true
     },
-
+    ngoUid: {
+      type: String,
+      required: false, // Optional until NGO assignment
+      index: true
+    },
     class: {
       type: String,
       default: "",

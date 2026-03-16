@@ -34,6 +34,22 @@ interface SchoolRequest {
   createdAt: string;
 }
 
+interface SchoolSession {
+  sessionId: string;
+  subject: string;
+  classes: string[];
+  schedule: {
+    day: string;
+    time: string;
+  };
+  location: string;
+  status: 'scheduled' | 'active' | 'completed' | 'cancelled';
+  volunteer?: {
+    name: string;
+    volunteerUid: string;
+  };
+}
+
 interface Student {
   uid: string;
   name: string;
@@ -70,10 +86,11 @@ export default function SchoolDashboard() {
   const [selectedRequest, setSelectedRequest] = useState<SchoolRequest | null>(null);
   const [loading, setLoading] = useState(false);
   const [showCreateForm, setShowCreateForm] = useState(false);
-  const [activeTab, setActiveTab] = useState<'students' | 'requests' | 'profile'>('students');
+  const [activeTab, setActiveTab] = useState<'students' | 'requests' | 'sessions' | 'profile'>('students');
   const [editingProfile, setEditingProfile] = useState(false);
   const [schoolProfile, setSchoolProfile] = useState<SchoolProfile | null>(null);
   const [students, setStudents] = useState<Student[]>([]);
+  const [sessions, setSessions] = useState<SchoolSession[]>([]);
   const [refreshKey, setRefreshKey] = useState(0);
   const [profileForm, setProfileForm] = useState<SchoolProfile>({
     uid: '',
@@ -102,6 +119,13 @@ export default function SchoolDashboard() {
     volunteersNeeded: 1,
     description: ''
   });
+  const [sessionFormData, setSessionFormData] = useState({
+    subject: '',
+    classes: '',
+    scheduleDay: 'Monday',
+    scheduleTime: '16:00',
+    location: ''
+  });
 
   // Load existing requests and profile
 useEffect(() => {
@@ -113,6 +137,13 @@ useEffect(() => {
   useEffect(() => {
     if (schoolProfile && activeTab === 'students') {
       loadStudents();
+    }
+  }, [schoolProfile, activeTab]);
+
+  // Load sessions when school profile is loaded
+  useEffect(() => {
+    if (schoolProfile && activeTab === 'sessions') {
+      loadSessions();
     }
   }, [schoolProfile, activeTab]);
 
@@ -135,6 +166,79 @@ useEffect(() => {
       }
     } catch (error) {
       console.error('Error loading students:', error);
+    }
+  };
+
+  const loadSessions = async () => {
+    try {
+      const token = localStorage.getItem('token');
+      const response = await fetch('/api/school/sessions', {
+        headers: {
+          'Authorization': `Bearer ${token}`
+        }
+      });
+      if (response.ok) {
+        const data = await response.json();
+        if (data.success) {
+          setSessions(data.sessions);
+        }
+      }
+    } catch (error) {
+      console.error('Error loading sessions:', error);
+    }
+  };
+
+  const createSession = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setLoading(true);
+
+    try {
+      const token = localStorage.getItem('token');
+      const sessionPayload = {
+        subject: sessionFormData.subject,
+        classes: sessionFormData.classes.split(',').map(c => c.trim()),
+        schedule: {
+          day: sessionFormData.scheduleDay,
+          time: sessionFormData.scheduleTime
+        },
+        location: sessionFormData.location
+      };
+
+      const response = await fetch('/api/school/create-session', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify(sessionPayload)
+      });
+
+      if (response.ok) {
+        const data = await response.json();
+        if (data.success) {
+          // Reset form
+          setSessionFormData({
+            subject: '',
+            classes: '',
+            scheduleDay: 'Monday',
+            scheduleTime: '16:00',
+            location: ''
+          });
+          setShowCreateForm(false);
+          // Reload sessions
+          await loadSessions();
+          alert('Session request created successfully! A volunteer will be assigned soon.');
+        } else {
+          alert('Error creating session: ' + data.message);
+        }
+      } else {
+        alert('Error creating session');
+      }
+    } catch (error) {
+      console.error('Error creating session:', error);
+      alert('Error creating session');
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -430,6 +534,16 @@ useEffect(() => {
               Volunteer Requests
             </button>
             <button
+              onClick={() => setActiveTab('sessions')}
+              className={`py-4 px-1 border-b-2 font-medium text-sm ${
+                activeTab === 'sessions'
+                  ? 'border-blue-500 text-blue-600'
+                  : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+              }`}
+            >
+              Volunteer Sessions
+            </button>
+            <button
               onClick={() => setActiveTab('profile')}
               className={`py-4 px-1 border-b-2 font-medium text-sm ${
                 activeTab === 'profile'
@@ -667,6 +781,138 @@ useEffect(() => {
                 </CardContent>
               </Card>
             )}
+          </div>
+        ) : activeTab === 'sessions' ? (
+          <div className="space-y-6">
+            {/* Create Session Button */}
+            <div className="flex justify-between items-center">
+              <h2 className="text-2xl font-bold text-gray-900">Volunteer Teaching Sessions</h2>
+              <Button onClick={() => setShowCreateForm(true)} className="flex items-center gap-2">
+                <Plus className="w-4 h-4" />
+                Request Session
+              </Button>
+            </div>
+
+            {/* Create Session Form */}
+            {showCreateForm && (
+              <Card>
+                <CardHeader>
+                  <CardTitle>Request Volunteer Teaching Session</CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <form onSubmit={createSession} className="space-y-4">
+                    <div className="grid grid-cols-2 gap-4">
+                      <Input
+                        placeholder="Subject (e.g., Mathematics, Science)"
+                        value={sessionFormData.subject}
+                        onChange={(e) => setSessionFormData({...sessionFormData, subject: e.target.value})}
+                        required
+                      />
+                      <Input
+                        placeholder="Classes (comma-separated, e.g., Class 7, Class 8)"
+                        value={sessionFormData.classes}
+                        onChange={(e) => setSessionFormData({...sessionFormData, classes: e.target.value})}
+                        required
+                      />
+                    </div>
+                    <div className="grid grid-cols-2 gap-4">
+                      <Select value={sessionFormData.scheduleDay} onValueChange={(value) => setSessionFormData({...sessionFormData, scheduleDay: value})}>
+                        <SelectTrigger>
+                          <SelectValue placeholder="Select Day" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="Monday">Monday</SelectItem>
+                          <SelectItem value="Tuesday">Tuesday</SelectItem>
+                          <SelectItem value="Wednesday">Wednesday</SelectItem>
+                          <SelectItem value="Thursday">Thursday</SelectItem>
+                          <SelectItem value="Friday">Friday</SelectItem>
+                          <SelectItem value="Saturday">Saturday</SelectItem>
+                          <SelectItem value="Sunday">Sunday</SelectItem>
+                        </SelectContent>
+                      </Select>
+                      <Input
+                        placeholder="Time (e.g., 16:00)"
+                        value={sessionFormData.scheduleTime}
+                        onChange={(e) => setSessionFormData({...sessionFormData, scheduleTime: e.target.value})}
+                        required
+                      />
+                    </div>
+                    <div>
+                      <Input
+                        placeholder="Location (e.g., School Campus, Room 101)"
+                        value={sessionFormData.location}
+                        onChange={(e) => setSessionFormData({...sessionFormData, location: e.target.value})}
+                        required
+                      />
+                    </div>
+                    <div className="flex gap-2">
+                      <Button type="submit" disabled={loading}>
+                        {loading ? 'Creating...' : 'Request Session'}
+                      </Button>
+                      <Button type="button" variant="outline" onClick={() => setShowCreateForm(false)}>
+                        Cancel
+                      </Button>
+                    </div>
+                  </form>
+                </CardContent>
+              </Card>
+            )}
+
+            {/* Existing Sessions */}
+            <Card>
+              <CardHeader>
+                <CardTitle>Your Teaching Sessions</CardTitle>
+              </CardHeader>
+              <CardContent>
+                {sessions.length === 0 ? (
+                  <div className="text-center py-8">
+                    <Clock className="w-12 h-12 mx-auto text-gray-400 mb-4" />
+                    <p className="text-gray-500">No teaching sessions scheduled yet.</p>
+                    <p className="text-sm text-gray-400">Request a session to get volunteer teachers for your school.</p>
+                  </div>
+                ) : (
+                  <div className="space-y-4">
+                    {sessions.map((session) => (
+                      <div key={session.sessionId} className="border rounded-lg p-4">
+                        <div className="flex justify-between items-start mb-2">
+                          <div>
+                            <h3 className="font-semibold">{session.subject}</h3>
+                            <p className="text-sm text-gray-600">{session.classes.join(', ')}</p>
+                          </div>
+                          <div className="flex gap-2">
+                            <Badge className={
+                              session.status === 'scheduled' ? 'bg-blue-100 text-blue-800' :
+                              session.status === 'active' ? 'bg-green-100 text-green-800' :
+                              session.status === 'completed' ? 'bg-gray-100 text-gray-800' :
+                              'bg-red-100 text-red-800'
+                            }>
+                              {session.status}
+                            </Badge>
+                          </div>
+                        </div>
+                        <div className="flex items-center gap-4 text-sm text-gray-600">
+                          <div className="flex items-center gap-1">
+                            <Clock className="w-4 h-4" />
+                            {session.schedule.day} at {session.schedule.time}
+                          </div>
+                          <div className="flex items-center gap-1">
+                            <MapPin className="w-4 h-4" />
+                            {session.location}
+                          </div>
+                        </div>
+                        {session.volunteer && (
+                          <div className="mt-2 p-2 bg-blue-50 rounded">
+                            <p className="text-sm font-medium text-blue-800">
+                              Volunteer: {session.volunteer.name}
+                            </p>
+                          </div>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </CardContent>
+            </Card>
           </div>
         ) : (
           /* Profile Section */

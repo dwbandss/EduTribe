@@ -3,7 +3,7 @@
 import { useState, useEffect, Suspense } from 'react';
 import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
-import { Eye, EyeOff, BookOpen, Users, Building2, Heart, GraduationCap, Shield } from 'lucide-react';
+import { Eye, EyeOff, BookOpen, Users, Building2, Heart, GraduationCap } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -28,8 +28,12 @@ function SignupContent() {
     phone: '',
     locality: '',
     address: '',
-    description: ''
+    description: '',
+    ngoUid: '', // Add NGO UID for NGO volunteers
+    aadhaarNumber: '' // Add Aadhaar for independent volunteers
   });
+
+  const [volunteerType, setVolunteerType] = useState<'independent' | 'ngo'>('independent');
 
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
@@ -43,8 +47,7 @@ function SignupContent() {
     { value: 'ngo', label: 'NGO', icon: Heart, description: 'Partner with tribal schools' },
     { value: 'donor', label: 'Donor', icon: Building2, description: 'Support education initiatives' },
     { value: 'student', label: 'Student', icon: GraduationCap, description: 'Access educational resources' },
-    { value: 'school', label: 'School', icon: BookOpen, description: 'Register your tribal school' },
-    { value: 'admin', label: 'Admin', icon: Shield, description: 'Platform administration' }
+    { value: 'school', label: 'School', icon: BookOpen, description: 'Register your tribal school' }
   ];
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) => {
@@ -65,13 +68,39 @@ function SignupContent() {
     }
 
     try {
-      const response = await fetch('/api/auth/register', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify(formData),
-      });
+      let response;
+      
+      // Route volunteer registration to volunteer-register API
+      if (formData.role === 'volunteer') {
+        const volunteerData = {
+          name: formData.fullName,
+          email: formData.email,
+          phone: formData.phone,
+          password: formData.password,
+          confirmPassword: formData.confirmPassword,
+          type: volunteerType, // Add volunteer type
+          // Include volunteer-specific fields based on type
+          ...(volunteerType === 'ngo' && { ngoUid: formData.ngoUid }),
+          ...(volunteerType === 'independent' && { aadhaarNumber: formData.aadhaarNumber })
+        };
+        
+        response = await fetch('/api/auth/volunteer-register', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify(volunteerData),
+        });
+      } else {
+        // Other roles go to general register API
+        response = await fetch('/api/auth/register', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify(formData),
+        });
+      }
 
       const data = await response.json();
 
@@ -110,7 +139,11 @@ function SignupContent() {
             <CardContent className="p-6">
               <div className="text-center">
                 <div className="text-green-600 mb-4">
-                  <Shield className="w-12 h-12 mx-auto" />
+                  <div className="w-12 h-12 mx-auto bg-green-100 rounded-full flex items-center justify-center">
+                    <svg className="w-6 h-6 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                    </svg>
+                  </div>
                 </div>
                 <h3 className="text-lg font-semibold text-green-800 mb-2">Registration Successful!</h3>
                 <p className="text-green-700 mb-4">{success}</p>
@@ -174,6 +207,74 @@ function SignupContent() {
                     })}
                   </div>
                 </div>
+
+                {/* Volunteer Type Selection - Only show when role is volunteer */}
+                {formData.role === 'volunteer' && (
+                  <div className="space-y-2">
+                    <label className="text-sm font-medium text-foreground">Volunteer Type</label>
+                    <div className="flex gap-3">
+                      <Button
+                        type="button"
+                        variant={volunteerType === 'independent' ? 'default' : 'outline'}
+                        onClick={() => setVolunteerType('independent')}
+                        className="flex-1"
+                      >
+                        Independent Volunteer
+                      </Button>
+                      <Button
+                        type="button"
+                        variant={volunteerType === 'ngo' ? 'default' : 'outline'}
+                        onClick={() => setVolunteerType('ngo')}
+                        className="flex-1"
+                      >
+                        NGO Volunteer
+                      </Button>
+                    </div>
+                    <p className="text-xs text-muted-foreground">
+                      {volunteerType === 'independent' 
+                        ? 'Register independently. Requires admin verification.'
+                        : 'Register under an NGO organization.'}
+                    </p>
+                  </div>
+                )}
+
+                {/* NGO UID Field - Only show for NGO volunteers */}
+                {formData.role === 'volunteer' && volunteerType === 'ngo' && (
+                  <div className="space-y-2">
+                    <label htmlFor="ngoUid" className="text-sm font-medium text-foreground">
+                      NGO UID *
+                    </label>
+                    <Input
+                      id="ngoUid"
+                      name="ngoUid"
+                      type="text"
+                      placeholder="Enter NGO UID provided by your organization"
+                      value={formData.ngoUid}
+                      onChange={handleChange}
+                      required
+                      className="bg-background border-border"
+                    />
+                  </div>
+                )}
+
+                {/* Aadhaar Field - Only show for independent volunteers */}
+                {formData.role === 'volunteer' && volunteerType === 'independent' && (
+                  <div className="space-y-2">
+                    <label htmlFor="aadhaarNumber" className="text-sm font-medium text-foreground">
+                      Aadhaar Number *
+                    </label>
+                    <Input
+                      id="aadhaarNumber"
+                      name="aadhaarNumber"
+                      type="text"
+                      placeholder="Enter 12-digit Aadhaar number"
+                      value={formData.aadhaarNumber}
+                      onChange={handleChange}
+                      required
+                      className="bg-background border-border"
+                    />
+                  </div>
+                )}
 
                 {/* Basic Information - Full Name hidden for schools, uses schoolName instead */}
                 {formData.role !== 'school' && (

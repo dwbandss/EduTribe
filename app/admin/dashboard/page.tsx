@@ -3,9 +3,10 @@
 import { useState, useEffect } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
-import { Users, Building, User, GraduationCap } from 'lucide-react';
+import { Button } from '@/components/ui/button';
+import { Users, Building, User, GraduationCap, LogOut } from 'lucide-react';
 import { NGO } from 'd:/EduTribe/models/NGO';
-import { Volunteer } from 'd:/EduTribe/models/VolunteerNew';
+import { Volunteer } from 'd:/EduTribe/models/Volunteer';
 import { School } from 'd:/EduTribe/models/School';
 import { Student } from 'd:/EduTribe/models/Student';
 import { Donor } from 'd:/EduTribe/models/Donor';
@@ -63,10 +64,23 @@ export default function AdminDashboard() {
     }
   };
 
+  const handleLogout = async () => {
+    try {
+      // Call logout API to clear cookie
+      await fetch('/api/auth/logout', { method: 'POST' });
+    } catch (error) {
+      console.error('Logout error:', error);
+    } finally {
+      // Clear localStorage and redirect
+      localStorage.removeItem('user');
+      window.location.href = '/login';
+    }
+  };
+
   const verifyEntity = async (
-  type: 'ngo' | 'school' | 'volunteer' | 'student' | 'donor',
-  uid: string
-): Promise<void> => {
+    type: 'ngo' | 'school' | 'volunteer' | 'student' | 'donor',
+    uid: string
+  ): Promise<void> => {
     try {
       const response = await fetch('/api/admin/verify', {
         method: 'POST',
@@ -99,8 +113,18 @@ export default function AdminDashboard() {
       {/* Header */}
       <header className="bg-white shadow-sm border-b">
         <div className="max-w-7xl mx-auto px-4 h-16 flex items-center justify-between">
-          <h1 className="text-2xl font-bold">Admin Dashboard</h1>
-          <Badge variant="outline">Admin</Badge>
+          <div className="flex items-center gap-4">
+            <h1 className="text-2xl font-bold">Admin Dashboard</h1>
+            <Badge variant="outline">Admin</Badge>
+          </div>
+          <Button
+            onClick={handleLogout}
+            variant="outline"
+            className="flex items-center gap-2"
+          >
+            <LogOut className="w-4 h-4" />
+            Logout
+          </Button>
         </div>
       </header>
 
@@ -246,7 +270,7 @@ function EntityList({ items, label, verifyField, onVerify }: {
 
           {items.map((item: any) => (
             <div
-              key={item.uid}
+              key={item._id}
               className="flex justify-between items-center border p-4 rounded-lg"
             >
               <div>

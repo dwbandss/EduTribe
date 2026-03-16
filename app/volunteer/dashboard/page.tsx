@@ -9,6 +9,21 @@ import { Textarea } from '@/components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { School, MapPin, Clock, Star, Check, X, MessageCircle, Plus, LogOut, User, Edit2, Save, Phone, Mail, Calendar } from 'lucide-react';
 
+interface VolunteerSession {
+  sessionId: string;
+  school: string;
+  schoolUid: string;
+  subject: string;
+  classes: string[];
+  schedule: {
+    day: string;
+    time: string;
+  };
+  location: string;
+  status: 'scheduled' | 'active' | 'completed' | 'cancelled';
+  mode: 'offline';
+}
+
 interface SchoolMatch {
   requestId: string;
   schoolName: string;
@@ -42,14 +57,23 @@ interface VolunteerProfile {
   experience: string;
   profileVisibility: 'public' | 'private';
   isActive: boolean;
+  // New fields for different volunteer types
+  type: 'ngo' | 'independent';
+  ngoUid?: string; // For NGO volunteers
+  ngoName?: string; // For NGO volunteers
+  verified: boolean;
+  status: 'pending' | 'active' | 'suspended';
+  location?: string; // For location filtering
 }
 
 export default function VolunteerDashboard() {
   const [matches, setMatches] = useState<SchoolMatch[]>([]);
+  const [sessions, setSessions] = useState<VolunteerSession[]>([]);
   const [profile, setProfile] = useState<VolunteerProfile | null>(null);
   const [loading, setLoading] = useState(false);
-  const [activeTab, setActiveTab] = useState<'requests' | 'profile'>('requests');
+  const [activeTab, setActiveTab] = useState<'requests' | 'sessions' | 'profile'>('requests');
   const [editingProfile, setEditingProfile] = useState(false);
+  const [locationFilter, setLocationFilter] = useState<string>(''); // Location filter
   const [profileForm, setProfileForm] = useState<VolunteerProfile>({
     userId: '',
     name: '',
@@ -63,13 +87,24 @@ export default function VolunteerDashboard() {
     education: '',
     experience: '',
     profileVisibility: 'public',
-    isActive: true
+    isActive: true,
+    type: 'independent', // Default type
+    verified: false,
+    status: 'pending',
+    location: '',
   });
 
   // Load profile and matches
   useEffect(() => {
     checkProfileAndLoad();
   }, []);
+
+  // Load sessions when tab changes to sessions
+  useEffect(() => {
+    if (activeTab === 'sessions' && profile) {
+      loadSessions();
+    }
+  }, [activeTab, profile]);
 
   const checkProfileAndLoad = async () => {
     try {
@@ -99,6 +134,26 @@ export default function VolunteerDashboard() {
     }
   };
 
+  const loadSessions = async () => {
+    try {
+      const token = localStorage.getItem('token');
+      const response = await fetch('/api/volunteer/sessions', {
+        headers: {
+          'Authorization': `Bearer ${token}`
+        }
+      });
+      
+      if (response.ok) {
+        const data = await response.json();
+        if (data.success) {
+          setSessions(data.sessions);
+        }
+      }
+    } catch (error) {
+      console.error('Error loading sessions:', error);
+    }
+  };
+
   const loadProfile = async (uid: string) => {
     try {
       // Fetch real profile from API
@@ -120,7 +175,11 @@ export default function VolunteerDashboard() {
             education: '', // Not in new schema
             experience: profile.experience || '',
             profileVisibility: 'public',
-            isActive: profile.isActive !== false
+            isActive: profile.isActive !== false,
+            type: profile.type || 'independent',
+            verified: profile.verified || false,
+            status: profile.status || 'pending',
+            location: profile.location || '',
           });
           setProfileForm({
             userId: profile.uid,
@@ -135,7 +194,11 @@ export default function VolunteerDashboard() {
             education: '',
             experience: profile.experience || '',
             profileVisibility: 'public',
-            isActive: profile.isActive !== false
+            isActive: profile.isActive !== false,
+            type: profile.type || 'independent',
+            verified: profile.verified || false,
+            status: profile.status || 'pending',
+            location: profile.location || '',
           });
         } else {
           // Profile not found, initialize with empty values
@@ -165,7 +228,11 @@ export default function VolunteerDashboard() {
       education: '',
       experience: '',
       profileVisibility: 'public',
-      isActive: true
+      isActive: true,
+      type: 'independent',
+      verified: false,
+      status: 'pending',
+      location: '',
     };
     setProfile(emptyProfile);
     setProfileForm(emptyProfile);
@@ -301,6 +368,43 @@ export default function VolunteerDashboard() {
         </div>
       </div>
 
+      {/* Volunteer Type Info and Location Filter */}
+      <div className="bg-blue-50 border-b">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4">
+          <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+            {/* Volunteer Type Information */}
+            <div className="flex flex-col gap-2">
+              <div className="flex items-center gap-4">
+                <span className="text-sm font-medium text-gray-600">Type:</span>
+                <Badge className={profile?.type === 'ngo' ? 'bg-green-100 text-green-800' : 'bg-purple-100 text-purple-800'}>
+                  {profile?.type === 'ngo' ? 'NGO Volunteer' : 'Independent Volunteer'}
+                </Badge>
+                <Badge className={profile?.verified ? 'bg-green-100 text-green-800' : 'bg-yellow-100 text-yellow-800'}>
+                  {profile?.verified ? 'Verified' : 'Pending Verification'}
+                </Badge>
+              </div>
+              {profile?.type === 'ngo' && profile?.ngoName && (
+                <div className="flex items-center gap-2">
+                  <span className="text-sm text-gray-600">NGO:</span>
+                  <span className="text-sm font-medium">{profile.ngoName}</span>
+                </div>
+              )}
+            </div>
+
+            {/* Location Filter */}
+            <div className="flex items-center gap-2">
+              <MapPin className="w-4 h-4 text-gray-500" />
+              <Input
+                placeholder="Filter by location..."
+                value={locationFilter}
+                onChange={(e) => setLocationFilter(e.target.value)}
+                className="w-48"
+              />
+            </div>
+          </div>
+        </div>
+      </div>
+
       {/* Navigation Tabs */}
       <div className="bg-white border-b">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
@@ -314,6 +418,16 @@ export default function VolunteerDashboard() {
               }`}
             >
               School Requests
+            </button>
+            <button
+              onClick={() => setActiveTab('sessions')}
+              className={`py-4 px-1 border-b-2 font-medium text-sm ${
+                activeTab === 'sessions'
+                  ? 'border-blue-500 text-blue-600'
+                  : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+              }`}
+            >
+              My Sessions
             </button>
             <button
               onClick={() => setActiveTab('profile')}
@@ -435,6 +549,86 @@ export default function VolunteerDashboard() {
                           <span className="font-medium">You have declined this request</span>
                         </div>
                       )}
+                    </CardContent>
+                  </Card>
+                ))}
+              </div>
+            )}
+          </div>
+        ) : activeTab === 'sessions' ? (
+          <div className="space-y-6">
+            <h2 className="text-2xl font-bold text-gray-900">My Assigned Teaching Sessions</h2>
+            
+            {sessions.length === 0 ? (
+              <Card>
+                <CardContent className="flex items-center justify-center py-12">
+                  <div className="text-center">
+                    <Calendar className="w-12 h-12 text-gray-400 mx-auto mb-4" />
+                    <h3 className="text-lg font-medium text-gray-900 mb-2">No sessions assigned</h3>
+                    <p className="text-gray-500">You haven't been assigned to any teaching sessions yet.</p>
+                    <p className="text-sm text-gray-400">Check the School Requests tab to find opportunities.</p>
+                  </div>
+                </CardContent>
+              </Card>
+            ) : (
+              <div className="space-y-4">
+                {sessions.map((session) => (
+                  <Card key={session.sessionId}>
+                    <CardContent className="p-6">
+                      <div className="flex justify-between items-start mb-4">
+                        <div>
+                          <h3 className="text-lg font-semibold text-gray-900">{session.subject}</h3>
+                          <p className="text-sm text-gray-600">{session.classes.join(', ')}</p>
+                        </div>
+                        <div className="flex gap-2">
+                          <Badge className={
+                            session.status === 'scheduled' ? 'bg-blue-100 text-blue-800' :
+                            session.status === 'active' ? 'bg-green-100 text-green-800' :
+                            session.status === 'completed' ? 'bg-gray-100 text-gray-800' :
+                            'bg-red-100 text-red-800'
+                          }>
+                            {session.status}
+                          </Badge>
+                          <Badge variant="outline">{session.mode}</Badge>
+                        </div>
+                      </div>
+                      
+                      <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
+                        <div className="flex items-center gap-2">
+                          <School className="w-4 h-4 text-gray-500" />
+                          <div>
+                            <p className="text-sm font-medium text-gray-900">School</p>
+                            <p className="text-sm text-gray-600">{session.school}</p>
+                          </div>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <Clock className="w-4 h-4 text-gray-500" />
+                          <div>
+                            <p className="text-sm font-medium text-gray-900">Schedule</p>
+                            <p className="text-sm text-gray-600">{session.schedule.day} at {session.schedule.time}</p>
+                          </div>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <MapPin className="w-4 h-4 text-gray-500" />
+                          <div>
+                            <p className="text-sm font-medium text-gray-900">Location</p>
+                            <p className="text-sm text-gray-600">{session.location}</p>
+                          </div>
+                        </div>
+                      </div>
+                      
+                      <div className="flex gap-2">
+                        <Button variant="outline" className="flex items-center gap-2">
+                          <MessageCircle className="w-4 h-4" />
+                          Contact School
+                        </Button>
+                        {session.status === 'scheduled' && (
+                          <Button className="flex items-center gap-2">
+                            <Check className="w-4 h-4" />
+                            Mark Attendance
+                          </Button>
+                        )}
+                      </div>
                     </CardContent>
                   </Card>
                 ))}

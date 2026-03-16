@@ -1,8 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
 import dbConnect from '@/lib/dbConnect';
-import { VolunteerRequest } from '@/models/VolunteerRequest';
-import { Volunteer } from '@/models/VolunteerNew';
+import VolunteerRequestModelExport, { VolunteerRequest } from '@/models/VolunteerRequest';
+import { Volunteer } from '@/models/Volunteer';
 
 // Validation schema
 const GetMatchingRequestsSchema = z.object({
@@ -49,7 +49,7 @@ export async function GET(request: NextRequest) {
     }
 
     // Find matching requests based on location (locality OR district) AND subjects
-    const matchingRequests = await VolunteerRequest.find({
+    const matchingRequests = await VolunteerRequestModelExport.find({
       status: 'open',
       $or: [
         { locality: preferredLocality },

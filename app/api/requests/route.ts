@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
 import dbConnect from '@/lib/dbConnect';
-import { SchoolRequest } from '@/models/volunteer';
+import VolunteerRequestModelExport, { VolunteerRequestModel as SchoolRequest } from '@/models/VolunteerRequest';
 
 // Rate limiting
 const rateLimitMap = new Map();
@@ -65,7 +65,7 @@ export async function POST(request: NextRequest) {
     const requestId = `REQ-${Date.now()}-${Math.random().toString(36).substr(2, 9).toUpperCase()}`;
 
     // Create school request using the schema constructor
-    await SchoolRequest.create({
+    await VolunteerRequestModelExport.create({
       requestId,
       ...requestData,
       location: {

@@ -1,8 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
 import dbConnect from '@/lib/dbConnect';
-import { VolunteerMatch } from '@/models/volunteer';
-import { SchoolRequest } from '@/models/volunteer';
+import { Volunteer } from "@/models/Volunteer";
+import VolunteerRequestModelExport, { SchoolRequest } from '@/models/VolunteerRequest';
+import { VolunteerMatch } from '@/models/types/volunteer-match';
 
 // Validation schema
 const GetMatchesSchema = z.object({
@@ -42,7 +43,7 @@ export async function GET(request: NextRequest) {
     const detailedMatches = [];
     for (const match of matches) {
       try {
-        const schoolRequest = await SchoolRequest.findOne({ 
+        const schoolRequest = await VolunteerRequestModelExport.findOne({ 
           requestId: match.requestId 
         });
 
@@ -119,7 +120,7 @@ export async function POST(request: NextRequest) {
     const detailedMatches = [];
     for (const match of matches) {
       try {
-        const schoolRequest = await SchoolRequest.findOne({ 
+        const schoolRequest = await VolunteerRequestModelExport.findOne({ 
           requestId: match.requestId 
         });
 

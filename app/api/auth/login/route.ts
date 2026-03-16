@@ -5,7 +5,7 @@ import jwt from 'jsonwebtoken';
 import mongoose from 'mongoose';
 
 // Import models
-import { User } from '@/models/User';
+import { User, Volunteer, Admin } from '@/models';
 
 // Import JWT utilities
 import { signToken } from '@/lib/auth/jwt';
@@ -59,13 +59,45 @@ export async function POST(request: NextRequest) {
     // Validate request data
     const { identifier, password } = loginSchema.parse(body);
 
-    // Find user by email or UID
-    const user = await User.findOne({
+    // Find user by email or UID in multiple models
+    let user = null;
+    let userType = null;
+    
+    // Check in User model first (students, schools, NGOs, donors)
+    user = await User.findOne({
       $or: [
         { email: identifier.toLowerCase() },
         { uid: identifier.toUpperCase() }
       ]
     }).select("+password");
+    
+    if (user) {
+      userType = 'user';
+    } else {
+      // Check in Volunteer model
+      user = await Volunteer.findOne({
+        $or: [
+          { email: identifier.toLowerCase() },
+          { volunteerUid: identifier.toUpperCase() }
+        ]
+      }).select("+password");
+      
+      if (user) {
+        userType = 'volunteer';
+      } else {
+        // Check in Admin model
+        user = await Admin.findOne({
+          $or: [
+            { email: identifier.toLowerCase() },
+            { adminUid: identifier.toUpperCase() }
+          ]
+        }).select("+password");
+        
+        if (user) {
+          userType = 'admin';
+        }
+      }
+    }
 
     if (!user) {
       return NextResponse.json(
@@ -100,24 +132,46 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Generate JWT token
-    const token = signToken({
-      uid: user.uid,
+    // Generate JWT token with correct UID field based on user type
+    const tokenPayload: any = {
       role: user.role,
-      userId: user._id
-    });
+      userId: user._id.toString()
+    };
+    
+    // Set UID based on user type
+    if (userType === 'volunteer') {
+      tokenPayload.uid = user.volunteerUid;
+      tokenPayload.volunteerUid = user.volunteerUid;
+      tokenPayload.type = user.type;
+      tokenPayload.verified = user.verified;
+      tokenPayload.status = user.status;
+    } else if (userType === 'admin') {
+      tokenPayload.uid = user.adminUid;
+      tokenPayload.adminRole = user.role;
+    } else {
+      tokenPayload.uid = user.uid;
+    }
+    
+    const token = signToken(tokenPayload);
 
     // Create response with HTTP-only cookie
     const response = NextResponse.json(
       {
         success: true,
         message: "Login successful",
-        role: user.role,
+        role: userType === 'volunteer' ? 'volunteer' : (userType === 'admin' ? 'admin' : user.role),
         name: user.name,
-        uid: user.uid
+        uid: userType === 'volunteer' ? user.volunteerUid : (userType === 'admin' ? user.adminUid : user.uid)
       },
       { status: 200 }
     );
+
+    // Debug logging
+    console.log('=== LOGIN RESPONSE ===');
+    console.log('User role:', userType === 'volunteer' ? 'volunteer' : (userType === 'admin' ? 'admin' : user.role));
+    console.log('User type:', userType);
+    console.log('User name:', user.name);
+    console.log('====================');
 
     // Set HTTP-only cookie
     response.cookies.set("token", token, {

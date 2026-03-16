@@ -1,9 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
 import dbConnect from '@/lib/dbConnect';
-import { VolunteerRequest } from '@/models/VolunteerRequest';
+import VolunteerRequestModelExport, { VolunteerRequest } from '@/models/VolunteerRequest';
 import { School } from '@/models/School';
-import { Volunteer } from '@/models'; // Import Volunteer correctly
+import { Volunteer } from "@/models/Volunteer";
 
 // Validation schema
 const CreateRequestSchema = z.object({
@@ -60,7 +60,7 @@ export async function POST(request: NextRequest) {
     }
 
     // Create volunteer request - NO data duplication, only store UID reference
-    const volunteerRequest = new VolunteerRequest({
+    const volunteerRequest = new VolunteerRequestModelExport({
       requestId: generateRequestId(),
       schoolUid,
       district,
@@ -111,7 +111,7 @@ export async function GET(request: NextRequest) {
     if (schoolUid) query.schoolUid = schoolUid;
     if (status) query.status = status;
 
-    const requests = await VolunteerRequest.find(query)
+    const requests = await VolunteerRequestModelExport.find(query)
       .sort({ createdAt: -1 });
 
     return NextResponse.json({

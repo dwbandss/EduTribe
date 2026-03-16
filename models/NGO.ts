@@ -10,8 +10,11 @@ export interface INGO extends Document {
   address: string;
   description: string;
   verifiedStatus: 'pending' | 'verified' | 'rejected';
+  registrationNumber?: string;
   createdAt: Date;
   updatedAt: Date;
+  volunteers?: string[]; // Array of volunteer UIDs
+  schools?: string[]; // Array of school UIDs
 }
 
 const NGOSchema = new Schema<INGO>({
@@ -51,11 +54,26 @@ const NGOSchema = new Schema<INGO>({
     type: String, 
     required: true 
   },
+  volunteers: [{ 
+    type: String, 
+    default: [] 
+  }],
+  schools: [{ 
+    type: String, 
+    default: [] 
+  }],
   verifiedStatus: { 
     type: String, 
     required: true, 
     enum: ['pending', 'verified', 'rejected'],
     default: 'pending'
+  },
+  
+  registrationNumber: {
+    type: String,
+    required: false,
+    unique: true,
+    sparse: true // Handle stale index
   }
 }, {
   timestamps: true

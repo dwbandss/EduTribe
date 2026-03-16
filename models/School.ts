@@ -9,6 +9,9 @@ export interface ISchool extends Document {
   district: string;
   state: string;
   address?: string;
+  ngoUid?: string; // NGO that manages this school
+  assignedVolunteers: string[]; // Array of volunteer UIDs assigned to this school
+  activeRequests: string[]; // Array of active request IDs
   subjectsNeeded: string[];
   classesAvailable: string[];
   totalStudents: number;
@@ -53,6 +56,19 @@ const SchoolSchema = new Schema<ISchool>({
     required: false,
     default: "Not provided"
   },
+  ngoUid: { 
+    type: String, 
+    required: false,
+    index: true
+  },
+  assignedVolunteers: [{ 
+    type: String, 
+    index: true 
+  }],
+  activeRequests: [{ 
+    type: String, 
+    index: true 
+  }],
   subjectsNeeded: [{ 
     type: String, 
     required: true 
