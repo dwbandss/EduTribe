@@ -57,11 +57,11 @@ interface VolunteerProfile {
   experience: string;
   profileVisibility: 'public' | 'private';
   isActive: boolean;
-  // New fields for different volunteer types
   type: 'ngo' | 'independent';
   ngoUid?: string; // For NGO volunteers
   ngoName?: string; // For NGO volunteers
-  verified: boolean;
+  verified: boolean; // For UI display
+  verifiedStatus: 'pending' | 'verified'; // For backend compatibility
   status: 'pending' | 'active' | 'suspended';
   location?: string; // For location filtering
 }
@@ -90,13 +90,16 @@ export default function VolunteerDashboard() {
     isActive: true,
     type: 'independent', // Default type
     verified: false,
+    verifiedStatus: 'pending',
     status: 'pending',
     location: '',
   });
 
   // Load profile and matches
   useEffect(() => {
-    checkProfileAndLoad();
+    if (typeof window !== "undefined") {
+      checkProfileAndLoad();
+    }
   }, []);
 
   // Load sessions when tab changes to sessions
@@ -107,6 +110,7 @@ export default function VolunteerDashboard() {
   }, [activeTab, profile]);
 
   const checkProfileAndLoad = async () => {
+    console.log("🔍 DASHBOARD: checkProfileAndLoad called");
     try {
       // Get volunteer UID from localStorage
       const uid = localStorage.getItem('uid');
@@ -117,11 +121,24 @@ export default function VolunteerDashboard() {
       }
       
       // Check if profile is complete
-      const checkResponse = await fetch(`/api/volunteer/profile-completion?volunteerUid=${uid}`);
-      const checkData = await checkResponse.json();
+      const checkResponse = await fetch(`/api/volunteer/complete-profile?volunteerUid=${uid}&t=${Date.now()}`);
+      
+      // ✅ SAFE JSON PARSING
+      const checkText = await checkResponse.text();
+      let checkData;
+      try {
+        checkData = JSON.parse(checkText);
+      } catch (err) {
+        console.error("❌ Profile completion API not JSON:", checkText);
+        return;
+      }
+      
+      console.log("🔍 DASHBOARD: profileCompleted =", checkData.data?.profileCompleted);
+      console.log("🔍 DASHBOARD: volunteer status =", checkData.data?.status);
       
       if (checkData.success && !checkData.data.profileCompleted) {
         // Redirect to profile completion page
+        console.log("🔍 DASHBOARD: Redirecting to complete-profile");
         window.location.href = '/volunteer/complete-profile';
         return;
       }
@@ -136,18 +153,26 @@ export default function VolunteerDashboard() {
 
   const loadSessions = async () => {
     try {
-      const token = localStorage.getItem('token');
-      const response = await fetch('/api/volunteer/sessions', {
-        headers: {
-          'Authorization': `Bearer ${token}`
-        }
-      });
+      const response = await fetch('/api/volunteer/sessions');
       
-      if (response.ok) {
-        const data = await response.json();
-        if (data.success) {
-          setSessions(data.sessions);
-        }
+      // ✅ SAFE JSON PARSING
+      const text = await response.text();
+      
+      if (!response.ok) {
+        console.error('Sessions API error:', response.status, text);
+        return;
+      }
+      
+      let data;
+      try {
+        data = JSON.parse(text);
+      } catch (err) {
+        console.error("❌ Sessions API not JSON:", text);
+        return;
+      }
+      
+      if (data.success) {
+        setSessions(data.sessions);
       }
     } catch (error) {
       console.error('Error loading sessions:', error);
@@ -158,56 +183,57 @@ export default function VolunteerDashboard() {
     try {
       // Fetch real profile from API
       const response = await fetch(`/api/profile?uid=${uid}&role=volunteer`);
-      if (response.ok) {
-        const data = await response.json();
-        if (data.success) {
-          const profile = data.data;
-          setProfile({
-            userId: profile.uid,
-            name: profile.name,
-            email: profile.email,
-            phone: profile.phone,
-            skills: profile.skills || [],
-            languages: [], // Not in new schema
-            availability: profile.availability || [],
-            rating: profile.ratingAverage || 0,
-            bio: profile.bio || '',
-            education: '', // Not in new schema
-            experience: profile.experience || '',
-            profileVisibility: 'public',
-            isActive: profile.isActive !== false,
-            type: profile.type || 'independent',
-            verified: profile.verified || false,
-            status: profile.status || 'pending',
-            location: profile.location || '',
-          });
-          setProfileForm({
-            userId: profile.uid,
-            name: profile.name,
-            email: profile.email,
-            phone: profile.phone,
-            skills: profile.skills || [],
-            languages: [],
-            availability: profile.availability || [],
-            rating: profile.ratingAverage || 0,
-            bio: profile.bio || '',
-            education: '',
-            experience: profile.experience || '',
-            profileVisibility: 'public',
-            isActive: profile.isActive !== false,
-            type: profile.type || 'independent',
-            verified: profile.verified || false,
-            status: profile.status || 'pending',
-            location: profile.location || '',
-          });
-        } else {
-          // Profile not found, initialize with empty values
-          initializeEmptyProfile(uid);
-        }
-      } else {
-        // API error, initialize with empty values
-        initializeEmptyProfile(uid);
+      
+      // ✅ SAFE JSON PARSING
+      const text = await response.text();
+      
+      if (!response.ok) {
+        console.error('Profile API error:', response.status, text);
+        return;
       }
+      
+      let data;
+      try {
+        data = JSON.parse(text);
+      } catch (err) {
+        console.error("❌ Profile API not JSON:", text);
+        return;
+      }
+      
+      // ❗ If API fails → fallback
+      if (!data.success) {
+        initializeEmptyProfile(uid);
+        return;
+      }
+      
+      const p = data.data;
+      
+      const mappedProfile: VolunteerProfile = {
+        userId: p.uid,
+        name: p.name,
+        email: p.email,
+        phone: p.phone,
+        skills: p.skills || [],
+        languages: [],
+        availability: p.availability || [],
+        rating: p.ratingAverage || 0,
+        bio: p.bio || '',
+        education: '',
+        experience: p.experience || '',
+        profileVisibility: 'public',
+        isActive: p.isActive !== false,
+        type: p.type || 'independent',
+        
+        // ✅ IMPORTANT FIX - Use status field (not verifiedStatus)
+        verified: p.status === 'active',
+        verifiedStatus: p.status || 'pending',
+        
+        status: p.status || 'pending',
+        location: p.location || ''
+      };
+      
+      setProfile(mappedProfile);
+      setProfileForm(mappedProfile);
     } catch (error) {
       console.error('Error loading profile:', error);
       initializeEmptyProfile(uid);
@@ -231,6 +257,7 @@ export default function VolunteerDashboard() {
       isActive: true,
       type: 'independent',
       verified: false,
+      verifiedStatus: 'pending',
       status: 'pending',
       location: '',
     };
@@ -259,29 +286,43 @@ export default function VolunteerDashboard() {
 
   const loadMatches = async (volunteerUid: string) => {
     try {
-      // Use new matching API
-      const response = await fetch(`/api/volunteer/matching-requests?volunteerUid=${volunteerUid}`);
-      if (response.ok) {
-        const data = await response.json();
-        if (data.success) {
-          // Transform the data to match the interface expected by the dashboard
-          const transformedMatches = (data.data || []).map((request: any) => ({
-            requestId: request.requestId,
-            schoolName: request.schoolName || 'School',
-            subject: request.subjectsRequired?.join(', ') || '',
-            gradeLevel: request.classesRequired?.join(', ') || '',
-            requiredSkills: request.subjectsRequired || [],
-            description: `Looking for volunteers for ${request.subjectsRequired?.join(' and ') || ''} in ${request.classesRequired?.join(', ') || ''}`,
-            urgency: 'medium',
-            duration: 'As per school schedule',
-            schedule: request.classesRequired || [],
-            score: 85,
-            explanation: `Your skills match the school's requirements.`,
-            status: 'pending',
-            createdAt: request.createdAt
-          }));
-          setMatches(transformedMatches);
-        }
+      // Use correct matching API
+      const response = await fetch(`/api/volunteer/matches?volunteerUid=${volunteerUid}`);
+      
+      // SAFE JSON PARSING
+      const text = await response.text();
+      
+      if (!response.ok) {
+        console.error('Matching requests API error:', response.status, text);
+        return;
+      }
+      
+      let data;
+      try {
+        data = JSON.parse(text);
+      } catch (err) {
+        console.error('Invalid JSON response:', text);
+        return;
+      }
+      
+      if (data.success) {
+        // Transform the data to match the interface expected by the dashboard
+        const transformedMatches = (data.data || []).map((request: any) => ({
+          requestId: request._id,
+          schoolName: request.schoolName || 'School',
+          subject: request.subjectsRequired?.join(', ') || '',
+          gradeLevel: request.classesRequired?.join(', ') || '',
+          requiredSkills: request.subjectsRequired || [],
+          description: `Looking for volunteers for ${request.subjectsRequired?.join(' and ') || ''} in ${request.classesRequired?.join(', ') || ''}`,
+          urgency: 'medium',
+          duration: 'As per school schedule',
+          schedule: request.classesRequired || [],
+          score: 85,
+          explanation: `Your skills match the school's requirements.`,
+          status: 'pending',
+          createdAt: request.createdAt
+        }));
+        setMatches(transformedMatches);
       }
     } catch (error) {
       console.error('Error loading matches:', error);
@@ -296,13 +337,22 @@ export default function VolunteerDashboard() {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          requestId: requestId,
-          volunteerId: 'VOL-001'
+          requestId,
+          volunteerId: localStorage.getItem('uid')
         })
       });
 
       if (response.ok) {
-        const data = await response.json();
+        // ✅ SAFE JSON PARSING
+        const text = await response.text();
+        let data;
+        try {
+          data = JSON.parse(text);
+        } catch (err) {
+          console.error("❌ Apply request API not JSON:", text);
+          return;
+        }
+        
         if (data.success) {
           // Update local state to show applied status
           setMatches(matches.map(match => 
@@ -310,6 +360,8 @@ export default function VolunteerDashboard() {
               ? { ...match, status: 'applied' as const }
               : match
           ));
+          // Reload matches to get updated status
+          await loadMatches(localStorage.getItem('uid')!);
         }
       }
     } catch (error) {
@@ -379,8 +431,8 @@ export default function VolunteerDashboard() {
                 <Badge className={profile?.type === 'ngo' ? 'bg-green-100 text-green-800' : 'bg-purple-100 text-purple-800'}>
                   {profile?.type === 'ngo' ? 'NGO Volunteer' : 'Independent Volunteer'}
                 </Badge>
-                <Badge className={profile?.verified ? 'bg-green-100 text-green-800' : 'bg-yellow-100 text-yellow-800'}>
-                  {profile?.verified ? 'Verified' : 'Pending Verification'}
+                <Badge variant={profile?.status === 'active' ? 'default' : 'secondary'}>
+                  {profile?.status === 'active' ? 'Verified' : 'Pending'}
                 </Badge>
               </div>
               {profile?.type === 'ngo' && profile?.ngoName && (
@@ -669,7 +721,7 @@ export default function VolunteerDashboard() {
                           onChange={(e) => setProfileForm({...profileForm, name: e.target.value})}
                         />
                       ) : (
-                        <p className="text-gray-900">{profile.name}</p>
+                        <p className="text-gray-900">{profileForm.name}</p>
                       )}
                     </div>
                     <div>
@@ -681,7 +733,7 @@ export default function VolunteerDashboard() {
                           onChange={(e) => setProfileForm({...profileForm, email: e.target.value})}
                         />
                       ) : (
-                        <p className="text-gray-900">{profile.email}</p>
+                        <p className="text-gray-900">{profileForm.email}</p>
                       )}
                     </div>
                     <div>
@@ -692,7 +744,7 @@ export default function VolunteerDashboard() {
                           onChange={(e) => setProfileForm({...profileForm, phone: e.target.value})}
                         />
                       ) : (
-                        <p className="text-gray-900">{profile.phone}</p>
+                        <p className="text-gray-900">{profileForm.phone}</p>
                       )}
                     </div>
                     <div>
@@ -711,8 +763,8 @@ export default function VolunteerDashboard() {
                           </SelectContent>
                         </Select>
                       ) : (
-                        <Badge className={profile.profileVisibility === 'public' ? 'bg-green-100 text-green-800' : 'bg-gray-100 text-gray-800'}>
-                          {profile.profileVisibility}
+                        <Badge className={profileForm.profileVisibility === 'public' ? 'bg-green-100 text-green-800' : 'bg-gray-100 text-gray-800'}>
+                          {profileForm.profileVisibility}
                         </Badge>
                       )}
                     </div>
@@ -738,7 +790,7 @@ export default function VolunteerDashboard() {
                         />
                       ) : (
                         <div className="flex flex-wrap gap-2">
-                          {profile.skills.map((skill, index) => (
+                          {profileForm.skills.map((skill, index) => (
                             <Badge key={index} variant="secondary">
                               {skill}
                             </Badge>
@@ -775,7 +827,7 @@ export default function VolunteerDashboard() {
                           onChange={(e) => setProfileForm({...profileForm, education: e.target.value})}
                         />
                       ) : (
-                        <p className="text-gray-900">{profile.education}</p>
+                        <p className="text-gray-900">{profileForm.education}</p>
                       )}
                     </div>
                     <div>
@@ -786,7 +838,7 @@ export default function VolunteerDashboard() {
                           onChange={(e) => setProfileForm({...profileForm, experience: e.target.value})}
                         />
                       ) : (
-                        <p className="text-gray-900">{profile.experience}</p>
+                        <p className="text-gray-900">{profileForm.experience}</p>
                       )}
                     </div>
                   </CardContent>

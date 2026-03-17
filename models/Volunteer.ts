@@ -164,16 +164,18 @@ VolunteerSchema.index({ ngoUid: 1 });
 VolunteerSchema.index({ aadhaarNumber: 1 });
 
 // Password hashing middleware
-VolunteerSchema.pre('save', async function(next: any) {
-  if (!this.isModified('password')) return next();
+VolunteerSchema.pre('save', async function(this: any, next: any) {
+  if (!this.isModified('password')) {
+    return next();
+  }
   
   try {
     const bcrypt = await import('bcryptjs');
     const salt = await bcrypt.default.genSalt(10);
     this.password = await bcrypt.default.hash(this.password, salt);
-    next();
+    return next();
   } catch (error) {
-    next(error);
+    return next(error);
   }
 });
 

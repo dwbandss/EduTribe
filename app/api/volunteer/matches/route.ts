@@ -7,7 +7,7 @@ import { VolunteerMatch } from '@/models/types/volunteer-match';
 
 // Validation schema
 const GetMatchesSchema = z.object({
-  volunteerId: z.string().min(1, 'Volunteer ID is required')
+  volunteerUid: z.string().min(1, 'Volunteer UID is required')
 });
 
 export async function GET(request: NextRequest) {
@@ -16,18 +16,18 @@ export async function GET(request: NextRequest) {
 
     // Get volunteer ID from query params
     const { searchParams } = new URL(request.url);
-    const volunteerId = searchParams.get('volunteerId');
+    const volunteerUid = searchParams.get('volunteerUid');
 
-    if (!volunteerId) {
+    if (!volunteerUid) {
       return NextResponse.json(
-        { success: false, message: 'Volunteer ID is required' },
+        { success: false, message: 'Volunteer UID is required' },
         { status: 400 }
       );
     }
 
     // Find all matches for this volunteer
     const matches = await VolunteerMatch.find({ 
-      volunteerId,
+      volunteerUid,
       status: 'pending'
     }).sort({ createdAt: -1 });
 
@@ -100,11 +100,11 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const { volunteerId } = validation.data;
+    const { volunteerUid } = validation.data;
 
     // Find all matches for this volunteer
     const matches = await VolunteerMatch.find({ 
-      volunteerId,
+      volunteerUid,
       status: 'pending'
     }).sort({ createdAt: -1 });
 

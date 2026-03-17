@@ -106,7 +106,21 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({
       success: true,
       message: 'Profile saved successfully',
-      data: updatedProfile || profileData
+      data: {
+        uid: updatedProfile.volunteerUid,
+        name: updatedProfile.name,
+        email: updatedProfile.email,
+        phone: updatedProfile.phone,
+        type: updatedProfile.type,
+        verifiedStatus: updatedProfile.status === 'active' ? 'verified' : 'pending',
+        status: updatedProfile.status,
+        ratingAverage: updatedProfile.ratingAverage || 0,
+        bio: updatedProfile.profile?.bio || '',
+        experience: updatedProfile.profile?.experience || '',
+        skills: updatedProfile.profile?.skills || [],
+        availability: updatedProfile.profile?.availability || [],
+        location: updatedProfile.profile?.preferredDistrict || ''
+      }
     });
 
   } catch (error) {
@@ -183,6 +197,28 @@ export async function GET(request: NextRequest) {
         { success: false, message: 'Profile not found' },
         { status: 404 }
       );
+    }
+
+    // ✅ Flatten volunteer profile data for frontend
+    if (role === 'volunteer') {
+      return NextResponse.json({
+        success: true,
+        data: {
+          uid: profile.volunteerUid,
+          name: profile.name,
+          email: profile.email,
+          phone: profile.phone,
+          type: profile.type,
+          verifiedStatus: profile.status === 'active' ? 'verified' : 'pending',
+          status: profile.status,
+          ratingAverage: profile.ratingAverage || 0,
+          bio: profile.profile?.bio || '',
+          experience: profile.profile?.experience || '',
+          skills: profile.profile?.skills || [],
+          availability: profile.profile?.availability || [],
+          location: profile.profile?.preferredDistrict || ''
+        }
+      });
     }
 
     console.log('Profile fetched from MongoDB for user:', uid);

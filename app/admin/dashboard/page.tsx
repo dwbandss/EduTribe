@@ -82,6 +82,8 @@ export default function AdminDashboard() {
     uid: string
   ): Promise<void> => {
     try {
+      console.log(`🔄 Verifying ${type} with UID: ${uid}`);
+      
       const response = await fetch('/api/admin/verify', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -89,13 +91,21 @@ export default function AdminDashboard() {
       });
 
       const result = await response.json();
+      console.log(`✅ Verify response:`, result);
 
       if (result.success) {
-        alert(`${type} updated`);
-        loadAdminData();
+        alert(`${type} verification status updated successfully!`);
+        
+        // Force reload data to show updated status
+        console.log('🔄 Reloading admin data...');
+        await loadAdminData();
+        
+      } else {
+        alert(`❌ Error: ${result.message}`);
       }
     } catch (err) {
-      console.error(err);
+      console.error('❌ Verify error:', err);
+      alert('❌ Failed to update verification status');
     }
   };
 
@@ -214,7 +224,7 @@ export default function AdminDashboard() {
           <EntityList
             items={data?.volunteers || []}
             label="name"
-            verifyField="verificationStatus"
+            verifyField="status"
             onVerify={(uid) => verifyEntity('volunteer', uid)}
           />
         )}
@@ -275,17 +285,21 @@ function EntityList({ items, label, verifyField, onVerify }: {
             >
               <div>
                 <p className="font-medium">{item[label]}</p>
-                <p className="text-sm text-gray-500">UID: {item.uid}</p>
+                <p className="text-sm text-gray-500">
+                  UID: {item.uid || item.ngoUid || item.schoolUid || item.volunteerUid || item.studentUid || item.donorUid}
+                </p>
               </div>
 
               <div className="flex gap-2 items-center">
-                <Badge variant={item[verifyField] ? 'default' : 'secondary'}>
-                  {item[verifyField] ? 'Verified' : 'Pending'}
+                <Badge variant={item[verifyField] === 'verified' || item[verifyField] === 'active' ? 'default' : 'secondary'}>
+                  {item[verifyField] === 'verified' || item[verifyField] === 'active' ? 'Verified' : 'Pending'}
                 </Badge>
 
                 <button
-                  onClick={() => onVerify(item.uid)}
-                  className="bg-blue-500 text-white px-3 py-1 rounded text-sm"
+                  onClick={() => onVerify(
+                    item.uid || item.ngoUid || item.schoolUid || item.volunteerUid || item.studentUid || item.donorUid
+                  )}
+                  className="bg-blue-500 text-white px-3 py-1 rounded text-sm hover:bg-blue-600"
                 >
                   Toggle
                 </button>

@@ -1,10 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
 import dbConnect from '@/lib/dbConnect';
-import VolunteerRequestModelExport, { VolunteerRequest } from '@/models/VolunteerRequest';
+import VolunteerRequestModelExport from '@/models/VolunteerRequest';
 import { Volunteer } from '@/models/Volunteer';
 
-// Validation schema
 const GetMatchingRequestsSchema = z.object({
   volunteerUid: z.string().min(1, 'Volunteer UID is required')
 });
@@ -14,54 +13,88 @@ export async function GET(request: NextRequest) {
     await dbConnect();
 
     const { searchParams } = new URL(request.url);
-    const volunteerUid = searchParams.get('volunteerUid');
 
-    if (!volunteerUid) {
+    const parsed = GetMatchingRequestsSchema.safeParse({
+      volunteerUid: searchParams.get('volunteerUid')
+    });
+
+    if (!parsed.success) {
       return NextResponse.json(
-        { success: false, message: 'Volunteer UID is required' },
+        { success: false, message: parsed.error.issues[0].message },
         { status: 400 }
       );
     }
 
-    // Get volunteer profile (try new collection first, then old)
-    let volunteer = await Volunteer.findOne({ uid: volunteerUid, isActive: true });
-    let preferredLocality, preferredDistrict, preferredSubjects, preferredClasses, skills;
-    
-    if (volunteer) {
-      preferredLocality = volunteer.preferredLocality;
-      preferredDistrict = volunteer.preferredDistrict;
-      preferredSubjects = volunteer.preferredSubjects;
-      preferredClasses = volunteer.preferredClasses;
-    } else {
-      // Volunteer not found in new collection
+    const { volunteerUid } = parsed.data;
+
+    const volunteer = await Volunteer.findOne({
+      volunteerUid,
+      isActive: true
+    }).lean(); // ✅ IMPORTANT
+
+    if (!volunteer) {
       return NextResponse.json(
         { success: false, message: 'Volunteer not found or inactive' },
         { status: 404 }
       );
     }
 
+    // SAFE DEFAULTS - Access nested profile fields
+    const preferredLocality = volunteer.profile?.preferredLocality || null;
+    const preferredDistrict = volunteer.profile?.preferredDistrict || null;
+    const preferredSubjects = volunteer.profile?.preferredSubjects || [];
+    const preferredClasses = volunteer.profile?.preferredClasses || [];
+
     if (preferredSubjects.length === 0) {
-      return NextResponse.json({
-        success: true,
-        message: 'No preferred subjects set for volunteer',
-        data: []
-      });
+      // fallback → show all requests in district
+      const district = volunteer.profile?.preferredDistrict;
+      if (district) {
+        const allRequests = await VolunteerRequestModelExport.find({
+          district: district,
+          status: 'open'
+        }).sort({ createdAt: -1 });
+        
+        return NextResponse.json({
+          success: true,
+          message: `Found ${allRequests.length} matching requests`,
+          data: allRequests
+        });
+      }
     }
 
-    // Find matching requests based on location (locality OR district) AND subjects
-    const matchingRequests = await VolunteerRequestModelExport.find({
-      status: 'open',
-      $or: [
-        { locality: preferredLocality },
-        { district: preferredDistrict }
-      ],
-      subjectsRequired: { $in: preferredSubjects }
-    }).sort({ createdAt: -1 });
+    // ✅ BUILD QUERY SAFELY
+    const locationFilters = [];
 
-    // Further filter by classes if volunteer has preferred classes
-    const filteredRequests = matchingRequests.filter(request => {
-      if (preferredClasses.length === 0) return true;
-      return request.classesRequired.some((cls: string) => preferredClasses.includes(cls));
+    if (preferredLocality) {
+      locationFilters.push({ locality: preferredLocality });
+    }
+
+    if (preferredDistrict) {
+      locationFilters.push({ district: preferredDistrict });
+    }
+
+    const query: any = {
+      status: 'open',
+      subjectsRequired: { $in: preferredSubjects }
+    };
+
+    if (locationFilters.length > 0) {
+      query.$or = locationFilters;
+    }
+
+    // ✅ FETCH WITH LEAN
+    const matchingRequests = await VolunteerRequestModelExport.find(query)
+      .sort({ createdAt: -1 })
+      .lean();
+
+    // SAFE FILTER
+    const filteredRequests = matchingRequests.filter((request: any) => {
+      if (!preferredClasses.length) return true;
+
+      const classesRequired = request.classesRequired || [];
+      return classesRequired.some((cls: string) =>
+        preferredClasses.includes(cls)
+      );
     });
 
     return NextResponse.json({
@@ -70,10 +103,15 @@ export async function GET(request: NextRequest) {
       data: filteredRequests
     });
 
-  } catch (error) {
+  } catch (error: any) {
     console.error('Get matching requests error:', error);
+
     return NextResponse.json(
-      { success: false, message: 'Failed to fetch matching requests' },
+      {
+        success: false,
+        message: 'Failed to fetch matching requests',
+        error: error?.message || 'Unknown error'
+      },
       { status: 500 }
     );
   }

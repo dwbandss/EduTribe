@@ -49,7 +49,7 @@ export default function CompleteProfilePage() {
 
   const checkProfileCompletion = async (uid: string) => {
     try {
-      const response = await fetch(`/api/volunteer/profile-completion?volunteerUid=${uid}`);
+      const response = await fetch(`/api/volunteer/complete-profile?volunteerUid=${uid}`);
       const data = await response.json();
       
       if (data.success && data.data.profileCompleted) {
@@ -138,23 +138,49 @@ export default function CompleteProfilePage() {
   const handleSubmit = async () => {
     if (!volunteerUid) return;
     
+    // ✅ VALIDATION: Require at least one subject or skill
+    if (formData.preferredSubjects.length === 0 && formData.skills.length === 0) {
+      alert("Please add at least one skill or one subject to complete your profile");
+      return;
+    }
+    
     setSaving(true);
     try {
-      const response = await fetch('/api/volunteer/complete-profile', {
+      const res = await fetch('/api/volunteer/complete-profile', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          uid: volunteerUid,
-          ...formData,
-          profileCompleted: true
+          volunteerUid: volunteerUid,
+          profile: {
+            bio: formData.bio,
+            skills: formData.skills,
+            preferredSubjects: formData.preferredSubjects,
+            preferredClasses: formData.preferredClasses,
+            preferredDistrict: formData.preferredDistrict,
+            preferredLocality: formData.preferredLocality,
+            experience: formData.experience,
+            availability: formData.availability
+          }
         })
       });
 
-      if (response.ok) {
-        router.push('/volunteer/dashboard');
-      } else {
-        console.error('Failed to save profile');
+      const text = await res.text();
+      console.log("🔍 RAW RESPONSE:", text);
+
+      let data;
+      try {
+        data = JSON.parse(text);
+      } catch {
+        console.error("❌ Not JSON:", text);
+        return;
       }
+
+      if (!data.success) {
+        console.error("❌ API ERROR:", data);
+        return;
+      }
+
+      router.push('/volunteer/dashboard');
     } catch (error) {
       console.error('Error saving profile:', error);
     } finally {

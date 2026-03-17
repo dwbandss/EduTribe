@@ -25,79 +25,102 @@ const CompleteProfileSchema = z.object({
 
 const JWT_SECRET = process.env.JWT_SECRET as string;
 
-export async function POST(request: NextRequest) {
+export async function GET(request: NextRequest) {
   try {
     await dbConnect();
 
-    // Get token from Authorization header
-    const token = request.headers.get('authorization')?.replace('Bearer ', '');
-    
-    if (!token) {
-      return NextResponse.json({ success: false, message: 'No token provided' }, { status: 401 });
-    }
+    const { searchParams } = new URL(request.url);
+    const volunteerUid = searchParams.get('volunteerUid');
 
-    // Verify token and get volunteer UID
-    const decoded = jwt.verify(token, JWT_SECRET) as any;
-    
-    if (!decoded || decoded.role !== 'volunteer') {
-      return NextResponse.json({ success: false, message: 'Invalid token' }, { status: 401 });
-    }
-
-    const body = await request.json();
-    const validation = CompleteProfileSchema.safeParse(body);
-
-    if (!validation.success) {
+    if (!volunteerUid) {
       return NextResponse.json(
-        { success: false, message: 'Invalid profile data', errors: validation.error.issues },
+        { success: false, message: 'Volunteer UID required' },
         { status: 400 }
       );
     }
 
-    const profileData = validation.data;
+    const volunteer = await Volunteer.findOne({ volunteerUid }).lean();
 
-    // Update volunteer profile
-    const updatedVolunteer = await Volunteer.findOneAndUpdate(
-      { uid: decoded.uid },
-      {
-        ...profileData,
-        dateOfBirth: new Date(profileData.dateOfBirth),
-        profileCompleted: true,
-        updatedAt: new Date()
-      },
-      { new: true, runValidators: true }
-    );
-
-    if (!updatedVolunteer) {
+    if (!volunteer) {
       return NextResponse.json(
         { success: false, message: 'Volunteer not found' },
         { status: 404 }
       );
     }
 
-    console.log('=== DEBUG: Volunteer profile completed ===', {
-      uid: updatedVolunteer.uid,
-      name: updatedVolunteer.name,
-      volunteerType: updatedVolunteer.volunteerType,
-      profileCompleted: updatedVolunteer.profileCompleted
-    });
+    // ✅ Check profile completion - realistic logic
+    const profileCompleted =
+      volunteer.name &&
+      volunteer.email &&
+      volunteer.phone &&
+      volunteer.profile?.bio &&
+      volunteer.profile?.experience;
 
     return NextResponse.json({
       success: true,
-      message: 'Profile completed successfully',
       data: {
-        uid: updatedVolunteer.uid,
-        name: updatedVolunteer.name,
-        volunteerType: updatedVolunteer.volunteerType,
-        profileCompleted: updatedVolunteer.profileCompleted,
-        verificationStatus: updatedVolunteer.verificationStatus,
-        adminVerified: updatedVolunteer.adminVerified
+        profileCompleted: Boolean(profileCompleted)
       }
     });
 
-  } catch (error) {
+  } catch (error: any) {
     console.error('Complete profile error:', error);
+
     return NextResponse.json(
-      { success: false, message: 'Failed to complete profile' },
+      {
+        success: false,
+        message: 'Server error',
+        error: error.message
+      },
+      { status: 500 }
+    );
+  }
+}
+
+export async function POST(req: NextRequest) {
+  try {
+    await dbConnect();
+
+    const body = await req.json();
+    console.log("📥 Incoming body:", body);
+
+    const { volunteerUid, profile } = body;
+
+    if (!volunteerUid || !profile) {
+      return NextResponse.json(
+        { success: false, message: 'Missing required fields' },
+        { status: 400 }
+      );
+    }
+
+    const updated = await Volunteer.findOneAndUpdate(
+      { volunteerUid },
+      {
+        $set: {
+          profile,
+          profileCompleted: true
+        }
+      },
+      { returnDocument: 'after' }
+    );
+
+    if (!updated) {
+      return NextResponse.json(
+        { success: false, message: 'Volunteer not found' },
+        { status: 404 }
+      );
+    }
+
+    return NextResponse.json({
+      success: true,
+      data: updated
+    });
+
+  } catch (error: any) {
+    console.error("❌ BACKEND ERROR:", error);
+
+    return NextResponse.json(
+      { success: false, message: error.message },
       { status: 500 }
     );
   }

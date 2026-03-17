@@ -21,69 +21,83 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    let entity = null;
-
-    /* =========================
-       VERIFY BASED ON TYPE
-    ========================= */
+    let updatedEntity = null;
 
     switch (type) {
       case "ngo": {
-        entity = await NGO.findOne({ ngoUid: uid });
+        const existing = await NGO.findOne({ ngoUid: uid });
+        if (!existing) break;
 
-        if (!entity) break;
-
-        entity.verifiedStatus =
-          entity.verifiedStatus === "verified" ? "pending" : "verified";
-
-        await entity.save();
+        updatedEntity = await NGO.findOneAndUpdate(
+          { ngoUid: uid },
+          {
+            verifiedStatus:
+              existing.verifiedStatus === "verified"
+                ? "pending"
+                : "verified",
+          },
+          { new: true }
+        );
         break;
       }
 
       case "school": {
-        entity = await School.findOne({ uid });
+        const existing = await School.findOne({ schoolUid: uid });
+        if (!existing) break;
 
-        if (!entity) break;
-
-        entity.verificationStatus =
-          entity.verificationStatus === "verified" ? "pending" : "verified";
-
-        await entity.save();
+        updatedEntity = await School.findOneAndUpdate(
+          { schoolUid: uid },
+          {
+            verificationStatus:
+              existing.verificationStatus === "verified"
+                ? "pending"
+                : "verified",
+          },
+          { new: true }
+        );
         break;
       }
 
       case "volunteer": {
-        entity = await Volunteer.findOne({ uid });
+        const existing = await Volunteer.findOne({ volunteerUid: uid });
+        if (!existing) break;
 
-        if (!entity) break;
-
-        entity.verificationStatus =
-          entity.verificationStatus === "verified" ? "pending" : "verified";
-
-        await entity.save();
+        updatedEntity = await Volunteer.findOneAndUpdate(
+          { volunteerUid: uid },
+          {
+            status: "active"
+          },
+          { new: true }
+        );
         break;
       }
 
       case "student": {
-        entity = await Student.findOne({ uid });
+        const existing = await Student.findOne({ studentUid: uid });
+        if (!existing) break;
 
-        if (!entity) break;
-
-        entity.verified = !entity.verified;
-
-        await entity.save();
+        updatedEntity = await Student.findOneAndUpdate(
+          { studentUid: uid },
+          { verified: !existing.verified },
+          { new: true }
+        );
         break;
       }
 
       case "donor": {
-        entity = await Donor.findOne({ uid });
+        const existing = await Donor.findOne({ donorUid: uid });
+        if (!existing) break;
 
-        if (!entity) break;
-
-        entity.verifiedStatus =
-          entity.verifiedStatus === "verified" ? "pending" : "verified";
-
-        await entity.save();
+        updatedEntity = await Donor.findOneAndUpdate(
+          { donorUid: uid },
+          {
+            verifiedStatus:
+              existing.verifiedStatus === "verified"
+                ? "pending"
+                : "verified",
+          },
+          { new: true }
+        );
         break;
       }
 
@@ -94,7 +108,7 @@ export async function POST(req: NextRequest) {
         );
     }
 
-    if (!entity) {
+    if (!updatedEntity) {
       return NextResponse.json(
         { success: false, message: "Entity not found" },
         { status: 404 }
@@ -104,7 +118,7 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({
       success: true,
       message: `${type} verification updated`,
-      data: entity
+      data: updatedEntity,
     });
 
   } catch (error) {

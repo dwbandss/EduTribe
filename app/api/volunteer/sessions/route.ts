@@ -7,16 +7,17 @@ export async function GET(request: NextRequest) {
   try {
     await dbConnect();
 
-    // Get authenticated volunteer
-    const authHeader = request.headers.get('authorization');
-    if (!authHeader || !authHeader.startsWith('Bearer ')) {
+    // Get authenticated volunteer from middleware
+    // The middleware should have set the user info in headers or we can use the token cookie
+    const token = request.cookies.get('token')?.value;
+    if (!token) {
       return NextResponse.json(
-        { success: false, message: 'Authorization required' },
+        { success: false, message: 'Authentication required' },
         { status: 401 }
       );
     }
 
-    const token = authHeader.split(' ')[1];
+    // Decode JWT token (simplified - in production use proper JWT verification)
     const decoded = JSON.parse(Buffer.from(token.split('.')[1], 'base64').toString());
     
     // Find volunteer
