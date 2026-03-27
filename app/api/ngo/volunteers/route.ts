@@ -1,112 +1,77 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { connectDB } from '@/lib/mongodb';
-import { Volunteer } from '@/models/Volunteer';
-import School from '@/models/School';
-import Session from '@/models/Session';
+import { z } from 'zod';
 import jwt from 'jsonwebtoken';
+import dbConnect from '@/lib/dbConnect';
+import { Volunteer } from '@/models/Volunteer';
+import { NGO } from '@/models';
+
+// Validation Schema
+const volunteerActionSchema = z.object({
+  volunteerUid: z.string().min(1, "Volunteer UID is required"),
+  action: z.enum(['verify', 'reject', 'activate', 'deactivate', 'assign'], "Action must be verify, reject, activate, deactivate, or assign")
+});
+
+const JWT_SECRET = process.env.JWT_SECRET as string;
 
 export async function GET(request: NextRequest) {
   try {
-    await connectDB();
+    await dbConnect();
 
-    // Get token from Authorization header
-    const token = request.headers.get('authorization')?.replace('Bearer ', '');
+    // Get token from Authorization header or cookies (fallback)
+    const headerToken = request.headers.get('authorization')?.replace('Bearer ', '');
+    const cookieToken = request.cookies.get('token')?.value;
+    const token = headerToken || cookieToken;
     
     if (!token) {
       return NextResponse.json({ success: false, message: 'No token provided' }, { status: 401 });
     }
 
     // Verify token and get NGO UID
-    const decoded = jwt.verify(token, process.env.JWT_SECRET!) as any;
+    const decoded = jwt.verify(token, JWT_SECRET) as any;
     
     if (!decoded || decoded.role !== 'ngo') {
-      return NextResponse.json({ success: false, message: 'Invalid token' }, { status: 401 });
+      return NextResponse.json({ success: false, message: 'Invalid NGO token' }, { status: 401 });
     }
 
-    // Get query parameters
-    const { searchParams } = new URL(request.url);
-    const status = searchParams.get('status');
-    const subject = searchParams.get('subject');
-    const district = searchParams.get('district');
+    const ngoUid = decoded.uid;
 
     // Get volunteers for this NGO
-    let volunteersQuery: any = { ngoUid: decoded.uid };
-    
-    // Add filters if provided
-    if (status) {
-      volunteersQuery.verificationStatus = status;
-    }
-    if (subject) {
-      volunteersQuery.preferredSubjects = { $in: [subject] };
-    }
-    if (district) {
-      volunteersQuery.preferredDistrict = district;
-    }
+    const ngoVolunteers = await Volunteer.find({ 
+      ngoUid: ngoUid,
+      type: 'ngo'
+    }).select('-password');
 
-    const volunteers = await Volunteer.find(volunteersQuery)
-      .select('-password')
-      .sort({ createdAt: -1 });
-    
-    // Get schools for reference
-    const schools = await School.find({ ngoUid: decoded.uid });
-    const schoolMap = new Map(schools.map(s => [s.uid, s]));
-
-    // Get session stats for each volunteer
-    const volunteerUids = volunteers.map(v => v.uid);
-    const sessions = await Session.find({ 
-      volunteerUid: { $in: volunteerUids },
-      status: 'completed'
-    });
-
-    // Calculate session stats per volunteer
-    const sessionStats = new Map();
-    sessions.forEach(session => {
-      const uid = session.volunteerUid;
-      if (!sessionStats.has(uid)) {
-        sessionStats.set(uid, { sessions: 0, hours: 0, students: 0 });
-      }
-      const stats = sessionStats.get(uid);
-      stats.sessions += 1;
-      stats.hours += session.duration || 0;
-      stats.students += session.studentsCount || 0;
-    });
-
-    // Enrich volunteer data
-    const enrichedVolunteers = volunteers.map(volunteer => {
-      const assignedSchool = volunteer.assignedSchoolUid ? schoolMap.get(volunteer.assignedSchoolUid) : null;
-      const stats = sessionStats.get(volunteer.uid) || { sessions: 0, hours: 0, students: 0 };
-      
-      return {
-        uid: volunteer.uid,
-        name: volunteer.name,
-        email: volunteer.email,
-        phone: volunteer.phone,
-        skills: volunteer.skills,
-        preferredSubjects: volunteer.preferredSubjects,
-        preferredClasses: volunteer.preferredClasses,
-        preferredDistrict: volunteer.preferredDistrict,
-        verificationStatus: volunteer.verificationStatus,
-        isActive: volunteer.isActive,
-        ratingAverage: volunteer.ratingAverage,
-        assignedSchool: assignedSchool ? {
-          uid: assignedSchool.uid,
-          schoolName: assignedSchool.schoolName,
-          district: assignedSchool.district
-        } : null,
-        assignedRequests: volunteer.assignedRequests || [],
-        stats: {
-          totalSessions: stats.sessions,
-          totalHours: Math.round(stats.hours / 60), // Convert minutes to hours
-          studentsTaught: stats.students
-        },
-        createdAt: volunteer.createdAt
-      };
+    console.log('=== DEBUG: NGO volunteers fetched ===', {
+      ngoUid,
+      count: ngoVolunteers.length,
+      volunteers: ngoVolunteers.map(v => ({
+        uid: v.volunteerUid,
+        name: v.name,
+        email: v.email,
+        verified: v.verified,
+        status: v.status
+      }))
     });
 
     return NextResponse.json({
       success: true,
-      volunteers: enrichedVolunteers,
-      total: volunteers.length
+      volunteers: ngoVolunteers.map(v => ({
+        uid: v.volunteerUid,
+        name: v.name,
+        email: v.email,
+        phone: v.phone,
+        verificationStatus: v.verified ? 'verified' : 'pending',
+        isActive: v.status === 'active',
+        skills: v.profile?.skills || [],
+        preferredSubjects: v.profile?.preferredSubjects || [],
+        preferredClasses: v.profile?.preferredClasses || [],
+        preferredDistrict: v.preferredDistrict || '',
+        ratingAverage: v.ratingAverage || 0,
+        totalSessions: v.totalSessions || 0,
+        totalHours: v.totalHours || 0,
+        studentsTaught: v.studentsTaught || 0
+      })),
+      count: ngoVolunteers.length
     });
 
   } catch (error) {
@@ -120,87 +85,181 @@ export async function GET(request: NextRequest) {
 
 export async function POST(request: NextRequest) {
   try {
-    await connectDB();
+    await dbConnect();
 
-    // Get token from Authorization header
-    const token = request.headers.get('authorization')?.replace('Bearer ', '');
+    // Get token from Authorization header or cookies (fallback)
+    const headerToken = request.headers.get('authorization')?.replace('Bearer ', '');
+    const cookieToken = request.cookies.get('token')?.value;
+    const token = headerToken || cookieToken;
     
     if (!token) {
       return NextResponse.json({ success: false, message: 'No token provided' }, { status: 401 });
     }
 
     // Verify token and get NGO UID
-    const decoded = jwt.verify(token, process.env.JWT_SECRET!) as any;
+    const decoded = jwt.verify(token, JWT_SECRET) as any;
     
     if (!decoded || decoded.role !== 'ngo') {
-      return NextResponse.json({ success: false, message: 'Invalid token' }, { status: 401 });
+      return NextResponse.json({ success: false, message: 'Invalid NGO token' }, { status: 401 });
     }
 
+    const ngoUid = decoded.uid;
+
+    // Validate request body
     const body = await request.json();
-    const { volunteerUid, action } = body;
+    const { volunteerUid, action } = volunteerActionSchema.parse(body);
 
-    if (!volunteerUid || !action) {
-      return NextResponse.json({ 
-        success: false, 
-        message: 'Volunteer UID and action are required' 
-      }, { status: 400 });
-    }
+    console.log('=== DEBUG: NGO volunteer action ===', {
+      ngoUid,
+      volunteerUid,
+      action
+    });
 
-    // Find volunteer
-    const volunteer = await Volunteer.findOne({ uid: volunteerUid, ngoUid: decoded.uid });
-    
+    // Find NGO volunteer
+    const volunteer = await Volunteer.findOne({ 
+      ngoUid: ngoUid,
+      volunteerUid: volunteerUid,
+      type: 'ngo'
+    }).select('-password');
+
     if (!volunteer) {
       return NextResponse.json({ 
         success: false, 
-        message: 'Volunteer not found' 
+        message: 'NGO volunteer not found' 
       }, { status: 404 });
     }
 
-    // Handle different actions
-    switch (action) {
-      case 'verify':
-        volunteer.verificationStatus = 'verified';
-        volunteer.isActive = true;
-        break;
-        
-      case 'reject':
-        volunteer.verificationStatus = 'rejected';
-        volunteer.isActive = false;
-        break;
-        
-      case 'activate':
-        volunteer.isActive = true;
-        break;
-        
-      case 'deactivate':
-        volunteer.isActive = false;
-        break;
-        
-      default:
-        return NextResponse.json({ 
-          success: false, 
-          message: 'Invalid action' 
-        }, { status: 400 });
+    // Handle verification action
+    if (action === 'verify') {
+      volunteer.verified = true;
+      volunteer.status = 'active';
+      volunteer.ngoUid = ngoUid;
+      
+      await volunteer.save();
+
+      // Update NGO volunteers array
+      const ngo = await NGO.findOne({ ngoUid: ngoUid });
+      if (ngo && !ngo.volunteers.includes(volunteer.volunteerUid)) {
+        ngo.volunteers.push(volunteer.volunteerUid);
+        await ngo.save();
+      }
+
+      console.log('=== DEBUG: NGO volunteer verified ===', {
+        uid: volunteer.volunteerUid,
+        name: volunteer.name,
+        verificationStatus: volunteer.verified ? 'verified' : 'pending'
+      });
+
+      return NextResponse.json({
+        success: true,
+        message: 'NGO volunteer verified successfully',
+        volunteer: {
+          uid: volunteer.volunteerUid,
+          name: volunteer.name,
+          email: volunteer.email,
+          verificationStatus: volunteer.verified ? 'verified' : 'pending'
+        }
+      });
     }
 
-    await volunteer.save();
+    // Handle rejection action
+    if (action === 'reject') {
+      volunteer.verified = false;
+      volunteer.status = 'suspended';
+      
+      await volunteer.save();
+
+      console.log('=== DEBUG: NGO volunteer rejected ===', {
+        uid: volunteer.volunteerUid,
+        name: volunteer.name,
+        verificationStatus: volunteer.verified ? 'verified' : 'pending'
+      });
+
+      return NextResponse.json({
+        success: true,
+        message: 'NGO volunteer rejected',
+        volunteer: {
+          uid: volunteer.volunteerUid,
+          name: volunteer.name,
+          verificationStatus: volunteer.verified ? 'verified' : 'pending'
+        }
+      });
+    }
+
+    // Handle activate action
+    if (action === 'activate') {
+      volunteer.status = 'active';
+      await volunteer.save();
+
+      return NextResponse.json({
+        success: true,
+        message: 'NGO volunteer activated',
+        volunteer: {
+          uid: volunteer.uid,
+          name: volunteer.name,
+          isActive: volunteer.isActive
+        }
+      });
+    }
+
+    // Handle deactivate action
+    if (action === 'deactivate') {
+      volunteer.status = 'suspended';
+      await volunteer.save();
+
+      return NextResponse.json({
+        success: true,
+        message: 'NGO volunteer deactivated',
+        volunteer: {
+          uid: volunteer.uid,
+          name: volunteer.name,
+          isActive: volunteer.isActive
+        }
+      });
+    }
+
+    // Handle assign action (assign to school)
+    if (action === 'assign') {
+      // This would typically open a modal or redirect to assignment page
+      // For now, just return success
+      return NextResponse.json({
+        success: true,
+        message: 'Ready to assign volunteer to school',
+        volunteer: {
+          uid: volunteer.volunteerUid,
+          name: volunteer.name,
+          ngoUid: volunteer.ngoUid
+        }
+      });
+    }
 
     return NextResponse.json({
-      success: true,
-      message: `Volunteer ${action}d successfully`,
-      volunteer: {
-        uid: volunteer.uid,
-        name: volunteer.name,
-        verificationStatus: volunteer.verificationStatus,
-        isActive: volunteer.isActive
-      }
-    });
-
+      success: false,
+      message: 'Invalid action'
+    }, { status: 400 });
   } catch (error) {
-    console.error('NGO Volunteer Action Error:', error);
-    return NextResponse.json({ 
-      success: false, 
-      message: 'Internal server error' 
-    }, { status: 500 });
+    console.error('NGO volunteer action error:', error);
+
+    if (error instanceof z.ZodError) {
+      return NextResponse.json(
+        {
+          success: false,
+          message: "Validation failed",
+          errors: error.issues.map((err: z.ZodIssue) => ({
+            path: err.path,
+            message: err.message
+          }))
+        },
+        { status: 400 }
+      );
+    }
+
+    return NextResponse.json(
+      {
+        success: false,
+        message: 'Internal server error'
+      },
+      { status: 500 }
+    );
   }
 }

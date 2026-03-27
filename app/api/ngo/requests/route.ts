@@ -1,27 +1,34 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { connectDB } from '@/lib/mongodb';
+import dbConnect from '@/lib/dbConnect';
 import VolunteerRequest from '@/models/VolunteerRequest';
 import School from '@/models/School';
 import { Volunteer } from '@/models/Volunteer';
 import jwt from 'jsonwebtoken';
 
+const JWT_SECRET = process.env.JWT_SECRET as string;
+
 export async function GET(request: NextRequest) {
   try {
-    await connectDB();
+    await dbConnect();
 
-    // Get token from Authorization header
-    const token = request.headers.get('authorization')?.replace('Bearer ', '');
+    // Get token from Authorization header or cookies (fallback)
+    const headerToken = request.headers.get('authorization')?.replace('Bearer ', '');
+    const cookieToken = request.cookies.get('token')?.value;
+    const token = headerToken || cookieToken;
     
     if (!token) {
       return NextResponse.json({ success: false, message: 'No token provided' }, { status: 401 });
     }
 
     // Verify token and get NGO UID
-    const decoded = jwt.verify(token, process.env.JWT_SECRET!) as any;
+    const decoded = jwt.verify(token, JWT_SECRET) as any;
     
     if (!decoded || decoded.role !== 'ngo') {
       return NextResponse.json({ success: false, message: 'Invalid token' }, { status: 401 });
     }
+
+    console.log('=== DEBUG: Requests API Token UID ===', decoded.uid);
+    console.log('=== DEBUG: Requests API NGO UID ===', decoded.ngoUid);
 
     // Get query parameters
     const { searchParams } = new URL(request.url);
@@ -110,25 +117,27 @@ function calculateUrgency(createdAt: Date, status: string): 'high' | 'medium' | 
   return 'low';
 }
 
-export async function POST(req: NextRequest) {
+export async function POST(request: NextRequest) {
   try {
-    await connectDB();
+    await dbConnect();
 
-    // Get token from Authorization header
-    const token = req.headers.get('authorization')?.replace('Bearer ', '');
+    // Get token from Authorization header or cookies (fallback)
+    const headerToken = request.headers.get('authorization')?.replace('Bearer ', '');
+    const cookieToken = request.cookies.get('token')?.value;
+    const token = headerToken || cookieToken;
     
     if (!token) {
       return NextResponse.json({ success: false, message: 'No token provided' }, { status: 401 });
     }
 
     // Verify token and get NGO UID
-    const decoded = jwt.verify(token, process.env.JWT_SECRET!) as any;
+    const decoded = jwt.verify(token, JWT_SECRET) as any;
     
     if (!decoded || decoded.role !== 'ngo') {
       return NextResponse.json({ success: false, message: 'Invalid token' }, { status: 401 });
     }
 
-    const body: any = await req.json();
+    const body: any = await request.json();
     const { requestId, action } = body;
 
     if (!requestId || !action) {

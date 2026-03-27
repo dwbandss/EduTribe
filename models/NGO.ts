@@ -9,12 +9,14 @@ export interface INGO extends Document {
   locality: string;
   address: string;
   description: string;
+  password: string;
   verifiedStatus: 'pending' | 'verified' | 'rejected';
   registrationNumber?: string;
   createdAt: Date;
   updatedAt: Date;
   volunteers?: string[]; // Array of volunteer UIDs
   schools?: string[]; // Array of school UIDs
+  comparePassword(candidatePassword: string): Promise<boolean>;
 }
 
 const NGOSchema = new Schema<INGO>({
@@ -54,6 +56,10 @@ const NGOSchema = new Schema<INGO>({
     type: String, 
     required: true 
   },
+  password: {
+    type: String,
+    required: true
+  },
   volunteers: [{ 
     type: String, 
     default: [] 
@@ -81,6 +87,29 @@ const NGOSchema = new Schema<INGO>({
 
 // Compound index for location queries
 NGOSchema.index({ locality: 1, district: 1 });
+
+// Password hashing middleware
+NGOSchema.pre('save', async function() {
+  if (!this.isModified('password')) return;
+  
+  try {
+    const bcrypt = require('bcryptjs');
+    const salt = await bcrypt.genSalt(10);
+    this.password = await bcrypt.hash(this.password, salt);
+  } catch (error: any) {
+    throw error;
+  }
+});
+
+// Password comparison method
+NGOSchema.methods.comparePassword = async function(candidatePassword: string): Promise<boolean> {
+  try {
+    const bcrypt = require('bcryptjs');
+    return await bcrypt.compare(candidatePassword, this.password);
+  } catch (error) {
+    return false;
+  }
+};
 
 export const NGO = mongoose.models.NGO || mongoose.model('NGO', NGOSchema);
 export default NGO;

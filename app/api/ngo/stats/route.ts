@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { connectDB } from '@/lib/mongodb';
+import dbConnect from '@/lib/dbConnect';
 import NGO from '@/models/NGO';
 import { Volunteer } from '@/models/Volunteer';
 import School from '@/models/School';
@@ -8,36 +8,57 @@ import Session from '@/models/Session';
 import Student from '@/models/Student';
 import jwt from 'jsonwebtoken';
 
+const JWT_SECRET = process.env.JWT_SECRET as string;
+
 export async function GET(request: NextRequest) {
   try {
-    await connectDB();
+    await dbConnect();
 
-    // Get token from Authorization header
-    const token = request.headers.get('authorization')?.replace('Bearer ', '');
+    // Get token from Authorization header or cookies (fallback)
+    const headerToken = request.headers.get('authorization')?.replace('Bearer ', '');
+    const cookieToken = request.cookies.get('token')?.value;
+    const token = headerToken || cookieToken;
     
     if (!token) {
       return NextResponse.json({ success: false, message: 'No token provided' }, { status: 401 });
     }
 
     // Verify token and get NGO UID
-    const decoded = jwt.verify(token, process.env.JWT_SECRET!) as any;
+    let decoded;
+    try {
+      decoded = jwt.verify(token, JWT_SECRET) as any;
+    } catch (err) {
+      return NextResponse.json({ success: false, message: 'Invalid token' }, { status: 401 });
+    }
     
     if (!decoded || decoded.role !== 'ngo') {
       return NextResponse.json({ success: false, message: 'Invalid token' }, { status: 401 });
     }
 
-    // Get NGO data
-    const ngo = await NGO.findOne({ ngoUid: decoded.uid });
+    // Debug UID mismatch
+    console.log('=== DEBUG: Stats Token UID ===', decoded.uid);
+    console.log('=== DEBUG: Stats Token NGO UID ===', decoded.ngoUid);
+    console.log('=== DEBUG: Stats Token Role ===', decoded.role);
+    console.log('=== DEBUG: Stats Full Token ===', JSON.stringify(decoded, null, 2));
+
+    // Get NGO data - normalize UID to uppercase
+    const ngo = await NGO.findOne({ ngoUid: decoded.uid?.toUpperCase() });
+    console.log('=== DEBUG: Stats Found NGO ===', ngo ? ngo.ngoUid : 'NOT FOUND');
+    console.log('=== DEBUG: Stats NGO Details ===', ngo ? {
+      ngoUid: ngo.ngoUid,
+      ngoName: ngo.ngoName,
+      email: ngo.email
+    } : 'NULL');
     if (!ngo) {
       return NextResponse.json({ success: false, message: 'NGO not found' }, { status: 404 });
     }
 
-    // Get all volunteer UIDs for this NGO
-    const volunteers = await Volunteer.find({ ngoUid: decoded.uid });
-    const volunteerUids = volunteers.map(v => v.uid);
+    // Get all volunteer UIDs for this NGO - normalize UID
+    const volunteers = await Volunteer.find({ ngoUid: decoded.uid?.toUpperCase() });
+    const volunteerUids = volunteers.map(v => v.volunteerUid);
 
-    // Get all schools for this NGO
-    const schools = await School.find({ ngoUid: decoded.uid });
+    // Get all schools for this NGO - normalize UID
+    const schools = await School.find({ ngoUid: decoded.uid?.toUpperCase() });
     const schoolUids = schools.map(s => s.uid);
 
     // Get all requests from schools managed by this NGO
@@ -45,10 +66,10 @@ export async function GET(request: NextRequest) {
       schoolUid: { $in: schoolUids } 
     });
 
-    // Get all sessions conducted by NGO volunteers
+    // Get all sessions conducted by NGO volunteers - normalize UID
     const sessions = await Session.find({ 
-      ngoUid: decoded.uid,
-      status: 'completed'
+      ngoUid: decoded.uid?.toUpperCase(),
+      volunteerUid: { $in: volunteerUids } 
     });
 
     // Get all students from schools managed by this NGO
@@ -60,9 +81,12 @@ export async function GET(request: NextRequest) {
     const stats = {
       // Volunteer Pipeline
       totalVolunteers: volunteers.length,
-      activeVolunteers: volunteers.filter(v => v.isActive && v.verificationStatus === 'verified').length,
-      pendingVolunteers: volunteers.filter(v => v.verificationStatus === 'pending').length,
-      averageRating: volunteers.reduce((acc, v) => acc + (v.ratingAverage || 0), 0) / volunteers.length || 0,
+      activeVolunteers: volunteers.filter(v => v.verified === true && v.status === 'active').length,
+      pendingVolunteers: volunteers.filter(v => v.status === 'pending').length,
+      averageRating: 
+        volunteers.length > 0
+          ? volunteers.reduce((acc, v) => acc + (v.ratingAverage || 0), 0) / volunteers.length
+          : 0,
 
       // School Pipeline
       totalSchools: schools.length,

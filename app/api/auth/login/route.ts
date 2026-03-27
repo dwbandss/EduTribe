@@ -6,6 +6,7 @@ import mongoose from 'mongoose';
 
 // Import models
 import { User, Volunteer, Admin } from '@/models';
+import NGO from '@/models/NGO';
 
 // Import JWT utilities
 import { signToken } from '@/lib/auth/jwt';
@@ -63,17 +64,24 @@ export async function POST(request: NextRequest) {
     let user = null;
     let userType = null;
     
-    // Check in User model first (students, schools, NGOs, donors)
-    user = await User.findOne({
+    console.log('=== DEBUG: Searching for NGO ===');
+    console.log('Identifier:', identifier);
+    
+    // FIRST CHECK NGO COLLECTION
+    user = await NGO.findOne({
       $or: [
         { email: identifier.toLowerCase() },
-        { uid: identifier.toUpperCase() }
+        { ngoUid: identifier.toUpperCase() }
       ]
-    }).select("+password");
+    });
+    
+    console.log('NGO Collection Result:', user ? 'FOUND' : 'NOT FOUND');
     
     if (user) {
-      userType = 'user';
+      userType = 'ngo';
+      console.log(' NGO found in NGO collection');
     } else {
+      console.log('=== DEBUG: NGO not found, checking Volunteer ===');
       // Check in Volunteer model
       user = await Volunteer.findOne({
         $or: [
@@ -84,7 +92,9 @@ export async function POST(request: NextRequest) {
       
       if (user) {
         userType = 'volunteer';
+        console.log(' Volunteer found');
       } else {
+        console.log('=== DEBUG: Volunteer not found, checking Admin ===');
         // Check in Admin model
         user = await Admin.findOne({
           $or: [
@@ -95,6 +105,29 @@ export async function POST(request: NextRequest) {
         
         if (user) {
           userType = 'admin';
+          console.log(' Admin found');
+        } else {
+          console.log('=== DEBUG: Admin not found, checking User collection ===');
+          // LAST: Check in User model (students, schools, donors)
+          user = await User.findOne({
+            $or: [
+              { email: identifier.toLowerCase() },
+              { uid: identifier.toUpperCase() }
+            ]
+          }).select("+password");
+          
+          if (user) {
+            userType = 'user';
+            console.log(' User found in User collection');
+            console.log('User details:', {
+              uid: user.uid,
+              name: user.name,
+              email: user.email,
+              role: user.role
+            });
+          } else {
+            console.log(' User not found in any collection');
+          }
         }
       }
     }
@@ -111,6 +144,7 @@ export async function POST(request: NextRequest) {
 
     // Compare password
     if (!user.password) {
+      console.log('❌ ERROR: User has no password field');
       return NextResponse.json(
         {
           success: false,
@@ -120,9 +154,14 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    console.log('✅ User has password field');
+    console.log('Password comparison starting...');
+    
     const isMatch = await user.comparePassword(password);
+    console.log('Password match result:', isMatch);
 
     if (!isMatch) {
+      console.log('❌ Password does not match');
       return NextResponse.json(
         {
           success: false,
@@ -148,6 +187,11 @@ export async function POST(request: NextRequest) {
     } else if (userType === 'admin') {
       tokenPayload.uid = user.adminUid;
       tokenPayload.adminRole = user.role;
+    } else if (userType === 'ngo') {
+      tokenPayload.uid = user.ngoUid;
+      tokenPayload.ngoUid = user.ngoUid;
+      tokenPayload.verifiedStatus = user.verifiedStatus;
+      tokenPayload.role = 'ngo'; // Explicitly set role for NGO
     } else {
       tokenPayload.uid = user.uid;
     }
@@ -159,17 +203,18 @@ export async function POST(request: NextRequest) {
       {
         success: true,
         message: "Login successful",
-        role: userType === 'volunteer' ? 'volunteer' : (userType === 'admin' ? 'admin' : user.role),
-        name: user.name,
-        uid: userType === 'volunteer' ? user.volunteerUid : (userType === 'admin' ? user.adminUid : user.uid)
+        role: userType === 'volunteer' ? 'volunteer' : (userType === 'admin' ? 'admin' : (userType === 'ngo' ? 'ngo' : user.role)),
+        name: userType === 'ngo' ? user.ngoName : user.name,
+        uid: userType === 'volunteer' ? user.volunteerUid : (userType === 'admin' ? user.adminUid : (userType === 'ngo' ? user.ngoUid : user.uid))
       },
       { status: 200 }
     );
 
     // Debug logging
     console.log('=== LOGIN RESPONSE ===');
-    console.log('User role:', userType === 'volunteer' ? 'volunteer' : (userType === 'admin' ? 'admin' : user.role));
+    console.log('User role:', userType === 'volunteer' ? 'volunteer' : (userType === 'admin' ? 'admin' : (userType === 'ngo' ? 'ngo' : user.role)));
     console.log('User type:', userType);
+    console.log('User name:', userType === 'ngo' ? user.ngoName : user.name);
     console.log('User name:', user.name);
     console.log('====================');
 

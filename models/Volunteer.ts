@@ -1,13 +1,11 @@
 import mongoose, { Document, Schema } from 'mongoose';
+import bcrypt from 'bcryptjs';
 
 // Volunteer Interface
 export interface IVolunteer extends Document {
   volunteerUid: string;
   
-  type: {
-    type: string;
-    enum: ["ngo", "independent"];
-  };
+  type: string;
   
   name: string;
   email: string;
@@ -164,29 +162,21 @@ VolunteerSchema.index({ ngoUid: 1 });
 VolunteerSchema.index({ aadhaarNumber: 1 });
 
 // Password hashing middleware
-VolunteerSchema.pre('save', async function(this: any, next: any) {
-  if (!this.isModified('password')) {
-    return next();
+VolunteerSchema.pre('save', async function () {
+  if (!this.isModified('password')) return;
+  
+  // Validation for NGO volunteers
+  if (this.type === 'ngo' && !this.ngoUid) {
+    throw new Error("NGO UID required for NGO volunteers");
   }
   
-  try {
-    const bcrypt = await import('bcryptjs');
-    const salt = await bcrypt.default.genSalt(10);
-    this.password = await bcrypt.default.hash(this.password, salt);
-    return next();
-  } catch (error) {
-    return next(error);
-  }
+  const salt = await bcrypt.genSalt(10);
+  this.password = await bcrypt.hash(this.password, salt);
 });
 
 // Password comparison method
 VolunteerSchema.methods.comparePassword = async function(candidatePassword: string): Promise<boolean> {
-  try {
-    const bcrypt = await import('bcryptjs');
-    return await bcrypt.default.compare(candidatePassword, this.password);
-  } catch (error) {
-    throw error;
-  }
+  return await bcrypt.compare(candidatePassword, this.password);
 };
 
 // Export the model

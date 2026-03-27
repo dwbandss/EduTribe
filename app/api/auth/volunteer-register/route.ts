@@ -1,6 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
-import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
 import { v4 as uuidv4 } from 'uuid';
 
@@ -104,21 +103,17 @@ export async function POST(request: NextRequest) {
       const volunteerCount = await Volunteer.countDocuments({ type: 'ngo' });
       const volunteerUid = `EDU-VOL-NGO-${String(volunteerCount + 1).padStart(4, '0')}`;
 
-      // Hash password
-      const salt = await bcrypt.genSalt(10);
-      const hashedPassword = await bcrypt.hash(password, salt);
-
-      // Create NGO volunteer
+      // Create NGO volunteer (password will be hashed by middleware)
       const volunteer = new Volunteer({
         volunteerUid: volunteerUid,
         type: 'ngo',
         name: name.trim(),
         email: email.toLowerCase().trim(),
         phone: phone.trim(),
-        password: hashedPassword,
+        password: password, // Let middleware handle hashing
         ngoUid: ngoUid,
-        verified: true, // NGO volunteers are verified by NGO
-        status: 'active', // NGO volunteers are immediately active
+        verified: false, // NGO volunteers need NGO verification
+        status: 'pending', // NGO volunteers start as pending until NGO verifies
         profileCompleted: false,
         userId: `USER-${volunteerUid}`, // Generate unique userId
         profile: {
@@ -210,19 +205,15 @@ export async function POST(request: NextRequest) {
       const volunteerCount = await Volunteer.countDocuments({ type: 'independent' });
       const volunteerUid = `EDU-VOL-IND-${String(volunteerCount + 1).padStart(4, '0')}`;
 
-      // Hash password
-      const salt = await bcrypt.genSalt(10);
-      const hashedPassword = await bcrypt.hash(password, salt);
-
-      // Create new independent volunteer
+      // Create new independent volunteer (password will be hashed by middleware)
       const volunteer = new Volunteer({
         volunteerUid: volunteerUid,
         type: 'independent',
         name: name.trim(),
         email: email.toLowerCase().trim(),
         phone: phone.trim(),
-        password: hashedPassword,
-        aadhaarNumber: aadhaarNumber,
+        password: password, // Let middleware handle hashing
+        aadhaarNumber: aadhaarNumber?.trim(),
         verified: false, // Needs admin verification
         status: 'pending',
         profileCompleted: false,

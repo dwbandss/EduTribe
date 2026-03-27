@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from "react";
 import Link from "next/link";
+import { useSearchParams } from "next/navigation";
 import {
   Users,
   BookOpen,
@@ -13,7 +14,8 @@ import {
   CheckCircle,
   Calendar,
   AlertCircle,
-  Clock
+  Clock,
+  X
 } from "lucide-react";
 
 import {
@@ -91,6 +93,8 @@ interface Request {
 }
 
 export default function NGODashboard() {
+  console.log('=== DEBUG: Dashboard component mounting ===');
+  const searchParams = useSearchParams();
   const [activeTab, setActiveTab] = useState<TabType>("overview");
   const [stats, setStats] = useState<Stats | null>(null);
   const [volunteers, setVolunteers] = useState<Volunteer[]>([]);
@@ -98,29 +102,63 @@ export default function NGODashboard() {
   const [requests, setRequests] = useState<Request[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string>("");
+  const [profile, setProfile] = useState<any>(null);
 
   useEffect(() => {
     fetchData();
-  }, [activeTab]);
+  }, []); // Initial fetch on mount
+
+  useEffect(() => {
+    // Handle URL tab parameter
+    const tabParam = searchParams.get('tab');
+    if (tabParam && ['volunteers', 'schools', 'requests', 'impact', 'overview'].includes(tabParam)) {
+      setActiveTab(tabParam as TabType);
+    }
+  }, [searchParams]);
+
+  useEffect(() => {
+    if (activeTab !== "overview") {
+      fetchData(); // Only fetch for non-overview tabs
+    }
+  }, [activeTab]); // Fetch when tab changes
 
   const fetchData = async () => {
     try {
-      const token = localStorage.getItem("token");
-      if (!token) {
-        setError("No authentication token found");
-        return;
-      }
-
-      const headers = {
-        Authorization: `Bearer ${token}`,
+      console.log('=== DEBUG: Dashboard fetching data ===');
+      
+      // Browser will automatically send httpOnly cookie
+      const fetchOptions = {
+        credentials: "include" as RequestCredentials
       };
 
+      // Fetch NGO profile
+      console.log('=== DEBUG: Dashboard fetching profile ===');
+      const profileResponse = await fetch("/api/ngo/profile", fetchOptions);
+      console.log('=== DEBUG: Dashboard profile response status ===', profileResponse.status);
+      
+      if (!profileResponse.ok) {
+        throw new Error("Profile fetch failed");
+      }
+      
+      const profileData = await profileResponse.json();
+      console.log('=== DEBUG: Dashboard profile data ===', profileData.success ? 'SUCCESS' : 'FAILED');
+      
+      if (profileData.success) {
+        setProfile(profileData.profile);
+      }
+
       // Always fetch stats for overview
-      const statsResponse = await fetch("/api/ngo/stats", { headers });
+      console.log('=== DEBUG: Dashboard fetching stats ===');
+      const statsResponse = await fetch("/api/ngo/stats", fetchOptions);
+      console.log('=== DEBUG: Dashboard stats response status ===', statsResponse.status);
       const statsData = await statsResponse.json();
+      console.log('=== DEBUG: Dashboard stats data ===', statsData.success ? 'SUCCESS' : 'FAILED');
+      
       if (statsData.success && statsData.stats) {
+        console.log('=== DEBUG: Setting stats data ===', statsData.stats);
         setStats(statsData.stats);
       } else {
+        console.log('=== DEBUG: Stats API failed, setting default stats ===');
         // Set default stats if API fails
         setStats({
           totalVolunteers: 0,
@@ -137,19 +175,19 @@ export default function NGODashboard() {
 
       // Fetch data based on active tab
       if (activeTab === "volunteers") {
-        const volunteersResponse = await fetch("/api/ngo/volunteers", { headers });
+        const volunteersResponse = await fetch("/api/ngo/volunteers", fetchOptions);
         const volunteersData = await volunteersResponse.json();
         if (volunteersData.success) {
           setVolunteers(volunteersData.volunteers);
         }
       } else if (activeTab === "schools") {
-        const schoolsResponse = await fetch("/api/ngo/schools", { headers });
+        const schoolsResponse = await fetch("/api/ngo/schools", fetchOptions);
         const schoolsData = await schoolsResponse.json();
         if (schoolsData.success) {
           setSchools(schoolsData.schools);
         }
       } else if (activeTab === "requests") {
-        const requestsResponse = await fetch("/api/ngo/requests", { headers });
+        const requestsResponse = await fetch("/api/ngo/requests", fetchOptions);
         const requestsData = await requestsResponse.json();
         if (requestsData.success) {
           setRequests(requestsData.requests);
@@ -166,60 +204,13 @@ export default function NGODashboard() {
 
   const handleVolunteerAction = async (volunteerUid: string, action: string) => {
     try {
-      const token = localStorage.getItem("token");
       const response = await fetch("/api/ngo/volunteers", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
-          Authorization: `Bearer ${token}`,
         },
+        credentials: "include" as RequestCredentials,
         body: JSON.stringify({ volunteerUid, action }),
-      });
-
-      const data = await response.json();
-      if (data.success) {
-        fetchData(); // Refresh data
-      } else {
-        setError(data.message);
-      }
-    } catch (err) {
-      setError("Failed to perform action");
-    }
-  };
-
-  const handleSchoolAction = async (schoolUid: string, action: string) => {
-    try {
-      const token = localStorage.getItem("token");
-      const response = await fetch("/api/ngo/schools", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${token}`,
-        },
-        body: JSON.stringify({ schoolUid, action }),
-      });
-
-      const data = await response.json();
-      if (data.success) {
-        fetchData(); // Refresh data
-      } else {
-        setError(data.message);
-      }
-    } catch (err) {
-      setError("Failed to perform action");
-    }
-  };
-
-  const handleRequestAction = async (requestId: string, action: string) => {
-    try {
-      const token = localStorage.getItem("token");
-      const response = await fetch("/api/ngo/requests", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${token}`,
-        },
-        body: JSON.stringify({ requestId, action }),
       });
 
       const data = await response.json();
@@ -241,6 +232,10 @@ export default function NGODashboard() {
     "impact"
   ];
 
+  console.log('=== DEBUG: Current stats state ===', stats);
+  console.log('=== DEBUG: Current active tab ===', activeTab);
+  console.log('=== DEBUG: Loading state ===', loading);
+
   if (loading && !stats) {
     return (
       <div className="min-h-screen bg-background flex items-center justify-center">
@@ -258,19 +253,36 @@ export default function NGODashboard() {
 
       <div className="border-b bg-card">
         <div className="container mx-auto px-4 py-4 flex justify-between">
-          <div className="flex items-center space-x-2">
-            <Heart className="w-6 h-6 text-primary" />
-            <span className="text-xl font-bold">NGO Dashboard</span>
-          </div>
-
           <div className="flex items-center gap-4">
-            <Link href="/ngo/profile" className="text-sm text-muted-foreground">
-              Profile
-            </Link>
+            <div className="flex items-center space-x-2">
+              <Heart className="w-6 h-6 text-primary" />
+              <span className="text-xl font-bold">NGO Dashboard</span>
+              <Badge variant={profile?.verifiedStatus === "verified" ? "default" : "secondary"}>
+                {profile?.verifiedStatus === "verified" ? (
+                  <CheckCircle className="w-3 h-3 mr-1" />
+                ) : (
+                  <Clock className="w-3 h-3 mr-1" />
+                )}
+                {profile?.verifiedStatus}
+              </Badge>
+            </div>
 
-            <Button size="sm" variant="outline">
-              Logout
-            </Button>
+            <div className="flex items-center gap-4">
+              <Link href="/ngo/profile" className="text-sm text-muted-foreground">
+                Profile
+              </Link>
+
+              <Button 
+                size="sm" 
+                variant="outline"
+                onClick={() => {
+                  document.cookie = "token=; expires=Thu, 01 Jan 1970 00:00:00 UTC; path=/;";
+                  window.location.href = "/login";
+                }}
+              >
+                Logout
+              </Button>
+            </div>
           </div>
         </div>
       </div>
@@ -358,12 +370,12 @@ export default function NGODashboard() {
           </>
         )}
 
-        {/* VOLUNTEERS */}
-
+        {/* VOLUNTEER REQUESTS */}
+        
         {activeTab === "volunteers" && (
           <Card>
             <CardHeader>
-              <CardTitle>Volunteer Management</CardTitle>
+              <CardTitle>Volunteer Requests & Management</CardTitle>
               {error && (
                 <CardDescription className="text-destructive">
                   {error}
@@ -375,95 +387,63 @@ export default function NGODashboard() {
               {loading ? (
                 <div className="text-center py-8">
                   <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-primary mx-auto"></div>
-                  <p className="mt-2 text-muted-foreground">Loading volunteers...</p>
-                </div>
-              ) : volunteers.length === 0 ? (
-                <div className="text-center py-8">
-                  <Users className="w-12 h-12 text-muted-foreground mx-auto mb-4" />
-                  <p className="text-muted-foreground">No volunteers found</p>
+                  <p className="mt-2 text-muted-foreground">Loading volunteer requests...</p>
                 </div>
               ) : (
-                volunteers.map((volunteer) => (
-                  <div
-                    key={volunteer.uid}
-                    className="flex justify-between items-center border p-4 rounded-lg"
-                  >
-                    <div>
-                      <p className="font-medium">{volunteer.name}</p>
-                      <p className="text-sm text-muted-foreground">{volunteer.uid}</p>
-                      <p className="text-sm text-muted-foreground">{volunteer.email}</p>
-
-                      <div className="flex items-center gap-2 mt-1">
-                        <Badge
-                          variant={
-                            volunteer.verificationStatus === "verified" && volunteer.isActive
-                              ? "default"
-                              : "secondary"
-                          }
-                        >
-                          {volunteer.verificationStatus === "verified" && volunteer.isActive
-                            ? "active"
-                            : volunteer.verificationStatus}
-                        </Badge>
-
-                        <div className="flex items-center gap-1 text-sm">
-                          <Star className="w-3 h-3 fill-yellow-500 text-yellow-500" />
-                          {volunteer.ratingAverage.toFixed(1)}
-                        </div>
+                <>
+                  {/* Pending Volunteer Requests */}
+                  <div className="mb-6">
+                    <h3 className="text-lg font-semibold mb-4">Pending Volunteer Requests</h3>
+                    {volunteers.filter(v => v.verificationStatus === 'pending').length === 0 ? (
+                      <div className="text-center py-8">
+                        <Users className="w-12 h-12 text-muted-foreground mx-auto mb-4" />
+                        <p className="text-muted-foreground">No pending volunteer requests</p>
                       </div>
+                    ) : (
+                      <div className="space-y-4">
+                        {volunteers.filter(v => v.verificationStatus === 'pending').map((volunteer) => (
+                          <div
+                            key={volunteer.uid}
+                            className="flex justify-between items-center border p-4 rounded-lg"
+                          >
+                            <div>
+                              <p className="font-medium">{volunteer.name}</p>
+                              <p className="text-sm text-muted-foreground">{volunteer.uid}</p>
+                              <p className="text-sm text-muted-foreground">{volunteer.email}</p>
+                              <p className="text-sm text-muted-foreground">{volunteer.phone}</p>
+                            </div>
 
-                      {volunteer.skills.length > 0 && (
-                        <div className="flex flex-wrap gap-1 mt-2">
-                          {volunteer.skills.slice(0, 3).map((skill, index) => (
-                            <Badge key={index} variant="outline" className="text-xs">
-                              {skill}
-                            </Badge>
-                          ))}
-                          {volunteer.skills.length > 3 && (
-                            <Badge variant="outline" className="text-xs">
-                              +{volunteer.skills.length - 3}
-                            </Badge>
-                          )}
-                        </div>
-                      )}
-                    </div>
-
-                    <div className="flex gap-2">
-                      {volunteer.verificationStatus === "pending" && (
-                        <Button
-                          size="sm"
-                          onClick={() => handleVolunteerAction(volunteer.uid, "verify")}
-                        >
-                          Verify
-                        </Button>
-                      )}
-                      {volunteer.verificationStatus === "verified" && (
-                        <Button
-                          size="sm"
-                          variant={volunteer.isActive ? "destructive" : "default"}
-                          onClick={() =>
-                            handleVolunteerAction(
-                              volunteer.uid,
-                              volunteer.isActive ? "deactivate" : "activate"
-                            )
-                          }
-                        >
-                          {volunteer.isActive ? "Deactivate" : "Activate"}
-                        </Button>
-                      )}
-                      <Button size="sm" variant="outline">
-                        View
-                      </Button>
-                    </div>
+                            <div className="flex gap-2">
+                              <Button 
+                                size="sm" 
+                                onClick={() => handleVolunteerAction(volunteer.uid, "verify")}
+                                className="bg-green-600 hover:bg-green-700"
+                              >
+                                <CheckCircle className="w-4 h-4 mr-1" />
+                                Verify
+                              </Button>
+                              <Button 
+                                size="sm" 
+                                variant="destructive"
+                                onClick={() => handleVolunteerAction(volunteer.uid, "reject")}
+                              >
+                                <X className="w-4 h-4 mr-1" />
+                                Reject
+                              </Button>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    )}
                   </div>
-                ))
+                </>
               )}
             </CardContent>
           </Card>
         )}
 
         {/* SCHOOLS */}
-
+        
         {activeTab === "schools" && (
           <Card>
             <CardHeader>
@@ -481,86 +461,38 @@ export default function NGODashboard() {
                   <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-primary mx-auto"></div>
                   <p className="mt-2 text-muted-foreground">Loading schools...</p>
                 </div>
-              ) : schools.length === 0 ? (
-                <div className="text-center py-8">
-                  <BookOpen className="w-12 h-12 text-muted-foreground mx-auto mb-4" />
-                  <p className="text-muted-foreground">No schools found</p>
-                </div>
               ) : (
-                schools.map((school) => (
-                  <div
-                    key={school.uid}
-                    className="flex justify-between items-center border p-4 rounded-lg"
-                  >
-                    <div>
-                      <p className="font-medium">{school.schoolName}</p>
-                      <p className="text-sm text-muted-foreground">
-                        {school.uid}
-                      </p>
-
-                      <div className="flex items-center gap-2 mt-1 text-sm">
-                        <MapPin className="w-3 h-3" />
-                        {school.district}, {school.state}
-                      </div>
-
-                      <p className="text-sm text-muted-foreground">
-                        {school.totalStudents} students
-                      </p>
-
-                      <div className="flex items-center gap-2 mt-2">
-                        <Badge
-                          variant={
-                            school.verificationStatus === "verified" ? "default" : "secondary"
-                          }
-                        >
-                          {school.verificationStatus}
-                        </Badge>
-                        
-                        {school.assignedVolunteers.length > 0 && (
-                          <Badge variant="outline" className="text-xs">
-                            {school.assignedVolunteers.length} volunteers
-                          </Badge>
-                        )}
-                        
-                        {school.activeRequests.length > 0 && (
-                          <Badge variant="outline" className="text-xs">
-                            {school.activeRequests.length} requests
-                          </Badge>
-                        )}
-                      </div>
+                <>
+                  {schools.length === 0 ? (
+                    <div className="text-center py-8">
+                      <BookOpen className="w-12 h-12 text-muted-foreground mx-auto mb-4" />
+                      <p className="text-muted-foreground">No partner schools yet</p>
                     </div>
-
-                    <div className="flex gap-2">
-                      {school.verificationStatus === "pending" && (
-                        <Button
-                          size="sm"
-                          onClick={() => handleSchoolAction(school.uid, "verify")}
+                  ) : (
+                    <div className="space-y-4">
+                      {schools.map((school) => (
+                        <div
+                          key={school.uid}
+                          className="flex justify-between items-center border p-4 rounded-lg"
                         >
-                          Verify
-                        </Button>
-                      )}
-                      {school.verificationStatus === "verified" && (
-                        <Button
-                          size="sm"
-                          variant="destructive"
-                          onClick={() => handleSchoolAction(school.uid, "reject")}
-                        >
-                          Reject
-                        </Button>
-                      )}
-                      <Button size="sm" variant="outline">
-                        View
-                      </Button>
+                          <div>
+                            <p className="font-medium">{school.schoolName}</p>
+                            <p className="text-sm text-muted-foreground">{school.uid}</p>
+                            <p className="text-sm text-muted-foreground">{school.district}, {school.state}</p>
+                            <p className="text-sm text-muted-foreground">{school.totalStudents} students</p>
+                          </div>
+                        </div>
+                      ))}
                     </div>
-                  </div>
-                ))
+                  )}
+                </>
               )}
             </CardContent>
           </Card>
         )}
 
         {/* REQUESTS */}
-
+        
         {activeTab === "requests" && (
           <Card>
             <CardHeader>
@@ -578,95 +510,31 @@ export default function NGODashboard() {
                   <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-primary mx-auto"></div>
                   <p className="mt-2 text-muted-foreground">Loading requests...</p>
                 </div>
-              ) : requests.length === 0 ? (
-                <div className="text-center py-8">
-                  <Calendar className="w-12 h-12 text-muted-foreground mx-auto mb-4" />
-                  <p className="text-muted-foreground">No requests found</p>
-                </div>
               ) : (
-                requests.map((request) => (
-                  <div
-                    key={request.requestId}
-                    className="flex justify-between items-center border p-4 rounded-lg"
-                  >
-                    <div>
-                      <p className="font-medium">
-                        {request.school?.schoolName || 'Unknown School'}
-                      </p>
-                      <p className="text-sm text-muted-foreground">
-                        {request.requestId}
-                      </p>
-
-                      <p className="text-sm text-muted-foreground">
-                        Subjects: {request.subjectsRequired.join(', ')}
-                      </p>
-                      
-                      <p className="text-sm text-muted-foreground">
-                        Classes: {request.classesRequired.join(', ')}
-                      </p>
-
-                      <p className="text-sm text-muted-foreground">
-                        Volunteers needed: {request.volunteersNeeded}
-                      </p>
-
-                      <div className="flex items-center gap-2 mt-1 text-sm">
-                        <MapPin className="w-3 h-3" />
-                        {request.district}, {request.state}
-                      </div>
-
-                      <div className="flex items-center gap-2 mt-1 text-sm">
-                        <Calendar className="w-3 h-3" />
-                        {new Date(request.createdAt).toLocaleDateString()}
-
-                        <Badge
-                          variant={
-                            request.urgency === "high"
-                              ? "destructive"
-                              : request.urgency === "medium"
-                              ? "default"
-                              : "secondary"
-                          }
-                        >
-                          {request.urgency}
-                        </Badge>
-                        
-                        <Badge
-                          variant={
-                            request.status === "open"
-                              ? "default"
-                              : request.status === "filled"
-                              ? "secondary"
-                              : "outline"
-                          }
-                        >
-                          {request.status}
-                        </Badge>
-                      </div>
+                <>
+                  {requests.length === 0 ? (
+                    <div className="text-center py-8">
+                      <AlertCircle className="w-12 h-12 text-muted-foreground mx-auto mb-4" />
+                      <p className="text-muted-foreground">No volunteer requests yet</p>
                     </div>
-
-                    <div className="flex gap-2">
-                      {request.status === "open" && (
-                        <Button
-                          size="sm"
-                          onClick={() => handleRequestAction(request.requestId, "close")}
+                  ) : (
+                    <div className="space-y-4">
+                      {requests.map((request) => (
+                        <div
+                          key={request.requestId}
+                          className="flex justify-between items-center border p-4 rounded-lg"
                         >
-                          Close
-                        </Button>
-                      )}
-                      {request.status === "closed" && (
-                        <Button
-                          size="sm"
-                          onClick={() => handleRequestAction(request.requestId, "reopen")}
-                        >
-                          Reopen
-                        </Button>
-                      )}
-                      <Button size="sm" variant="outline">
-                        Assign
-                      </Button>
+                          <div>
+                            <p className="font-medium">{request.school?.schoolName || 'Unknown School'}</p>
+                            <p className="text-sm text-muted-foreground">{request.requestId}</p>
+                            <p className="text-sm text-muted-foreground">{request.subjectsRequired?.join(', ')}</p>
+                            <p className="text-sm text-muted-foreground">{request.volunteersNeeded} volunteers needed</p>
+                          </div>
+                        </div>
+                      ))}
                     </div>
-                  </div>
-                ))
+                  )}
+                </>
               )}
             </CardContent>
           </Card>
@@ -700,7 +568,6 @@ export default function NGODashboard() {
                 label="Districts Covered"
                 value={stats.districtsCovered || 0}
               />
-
             </CardContent>
           </Card>
         )}

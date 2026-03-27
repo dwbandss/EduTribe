@@ -1,24 +1,28 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { connectDB } from '@/lib/mongodb';
+import dbConnect from '@/lib/dbConnect';
 import School from '@/models/School';
 import { Volunteer } from '@/models/Volunteer';
 import VolunteerRequest from '@/models/VolunteerRequest';
 import Student from '@/models/Student';
 import jwt from 'jsonwebtoken';
 
+const JWT_SECRET = process.env.JWT_SECRET as string;
+
 export async function GET(request: NextRequest) {
   try {
-    await connectDB();
+    await dbConnect();
 
-    // Get token from Authorization header
-    const token = request.headers.get('authorization')?.replace('Bearer ', '');
+    // Get token from Authorization header or cookies (fallback)
+    const headerToken = request.headers.get('authorization')?.replace('Bearer ', '');
+    const cookieToken = request.cookies.get('token')?.value;
+    const token = headerToken || cookieToken;
     
     if (!token) {
       return NextResponse.json({ success: false, message: 'No token provided' }, { status: 401 });
     }
 
     // Verify token and get NGO UID
-    const decoded = jwt.verify(token, process.env.JWT_SECRET!) as any;
+    const decoded = jwt.verify(token, JWT_SECRET) as any;
     
     if (!decoded || decoded.role !== 'ngo') {
       return NextResponse.json({ success: false, message: 'Invalid token' }, { status: 401 });
@@ -45,7 +49,7 @@ export async function GET(request: NextRequest) {
     
     // Get volunteers for reference
     const volunteers = await Volunteer.find({ ngoUid: decoded.uid });
-    const volunteerMap = new Map(volunteers.map(v => [v.uid, v]));
+    const volunteerMap = new Map(volunteers.map(v => [v.volunteerUid, v]));
 
     // Get requests for each school
     const schoolUids = schools.map(s => s.uid);
@@ -81,10 +85,10 @@ export async function GET(request: NextRequest) {
         .map((vUid: string) => volunteerMap.get(vUid))
         .filter((v: any) => v)
         .map((v: any) => ({
-          uid: v.uid,
+          uid: v.volunteerUid,
           name: v.name,
           skills: v.skills,
-          isActive: v.isActive
+          isActive: v.status === 'active'
         }));
 
       const stats = requestStats.get(school.uid) || { open: 0, filled: 0, closed: 0 };
@@ -132,17 +136,24 @@ export async function GET(request: NextRequest) {
 
 export async function POST(request: NextRequest) {
   try {
-    await connectDB();
+    await dbConnect();
 
-    // Get token from Authorization header
-    const token = request.headers.get('authorization')?.replace('Bearer ', '');
+    // Get token from Authorization header or cookies (fallback)
+    const headerToken = request.headers.get('authorization')?.replace('Bearer ', '');
+    const cookieToken = request.cookies.get('token')?.value;
+    const token = headerToken || cookieToken;
     
     if (!token) {
       return NextResponse.json({ success: false, message: 'No token provided' }, { status: 401 });
     }
 
     // Verify token and get NGO UID
-    const decoded = jwt.verify(token, process.env.JWT_SECRET!) as any;
+    let decoded;
+    try {
+      decoded = jwt.verify(token, JWT_SECRET) as any;
+    } catch (err) {
+      return NextResponse.json({ success: false, message: 'Invalid token' }, { status: 401 });
+    }
     
     if (!decoded || decoded.role !== 'ngo') {
       return NextResponse.json({ success: false, message: 'Invalid token' }, { status: 401 });

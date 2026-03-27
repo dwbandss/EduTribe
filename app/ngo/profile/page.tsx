@@ -35,9 +35,12 @@ interface NGOProfile {
   email: string;
   phone?: string;
   district: string;
-  state: string;
+  state?: string;
+  locality?: string;
+  address?: string;
   verifiedStatus: string;
   description?: string;
+  registrationNumber?: string;
   establishedYear?: number;
   website?: string;
   stats?: {
@@ -62,22 +65,25 @@ export default function NGOProfilePage() {
 
   const fetchProfile = async () => {
     try {
-      const token = localStorage.getItem("token");
-      if (!token) {
+      console.log('=== DEBUG: Profile Page fetching data ===');
+      
+      // Browser will automatically send httpOnly cookie
+      const response = await fetch("/api/ngo/profile", {
+        credentials: "include" as RequestCredentials,
+      });
+      
+      console.log('=== DEBUG: Profile API Response Status ===', response.status);
+
+      if (!response.ok) {
+        console.log('=== DEBUG: Profile API failed, redirecting to login ===');
         router.push("/login");
         return;
       }
 
-      const response = await fetch("/api/ngo/profile", {
-        headers: {
-          Authorization: `Bearer ${token}`,
-        },
-      });
-
       const data = await response.json();
 
       if (data.success) {
-        setProfile(data.ngo);
+        setProfile(data.profile); // Changed from data.ngo to data.profile
       } else {
         setError(data.message || "Failed to fetch profile");
       }
@@ -89,7 +95,8 @@ export default function NGOProfilePage() {
   };
 
   const handleLogout = () => {
-    localStorage.removeItem("token");
+    // Clear cookie and redirect to login
+    document.cookie = "token=; expires=Thu, 01 Jan 1970 00:00:00 UTC; path=/;";
     router.push("/login");
   };
 
@@ -198,7 +205,7 @@ export default function NGOProfilePage() {
                     <MapPin className="w-4 h-4 text-muted-foreground" />
                     <div>
                       <p className="text-sm text-muted-foreground">Location</p>
-                      <p className="font-medium">{profile.district}, {profile.state}</p>
+                      <p className="font-medium">{profile.locality}, {profile.district}</p>
                     </div>
                   </div>
 
@@ -302,20 +309,26 @@ export default function NGOProfilePage() {
                   </Button>
                 </Link>
 
-                <Button className="w-full" variant="outline">
-                  <Users className="w-4 h-4 mr-2" />
-                  Manage Volunteers
-                </Button>
+                <Link href="/ngo/dashboard?tab=volunteers">
+                  <Button className="w-full" variant="outline">
+                    <Users className="w-4 h-4 mr-2" />
+                    Manage Volunteers
+                  </Button>
+                </Link>
 
-                <Button className="w-full" variant="outline">
-                  <BookOpen className="w-4 h-4 mr-2" />
-                  Manage Schools
-                </Button>
+                <Link href="/ngo/dashboard?tab=schools">
+                  <Button className="w-full" variant="outline">
+                    <BookOpen className="w-4 h-4 mr-2" />
+                    Manage Schools
+                  </Button>
+                </Link>
 
-                <Button className="w-full" variant="outline">
-                  <Edit className="w-4 h-4 mr-2" />
+                <Link href="/ngo/edit-profile">
+                  <Button className="w-full" variant="outline">
+                    <Edit className="w-4 h-4 mr-2" />
                     Edit Profile
-                </Button>
+                  </Button>
+                </Link>
               </CardContent>
             </Card>
 
